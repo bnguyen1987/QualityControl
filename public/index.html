@@ -54,6 +54,7 @@ header.top{display:flex;align-items:center;gap:12px;padding:10px 16px;background
 .ai-pill{margin-left:auto;background:none;font-size:13px;padding:4px 10px;border-radius:99px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
 .ai-pill.ok{border-color:var(--pass);color:var(--pass)}
 .ai-pill.bad{border-color:var(--fail);color:var(--fail)}
+.ai-pill.warn{border-color:var(--check);color:var(--check)}
 
 main{flex:1;padding:14px 14px calc(var(--tab-h) + 24px + env(safe-area-inset-bottom,0px));max-width:1280px;width:100%;margin:0 auto}
 .view{display:none}.view.on{display:block}
@@ -102,7 +103,7 @@ main{flex:1;padding:14px 14px calc(var(--tab-h) + 24px + env(safe-area-inset-bot
 .result{display:grid;grid-template-columns:96px 1fr;gap:12px;align-items:start}
 .result img{width:96px;height:72px;object-fit:cover;border-radius:6px;background:var(--panel2)}
 .verdict{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:34px;line-height:1}
-.v-PASS{color:var(--pass)} .v-FAIL{color:var(--fail)} .v-CHECK{color:var(--check)} .v-UNCLEAR,.v-ERROR,.v-PENDING{color:var(--muted)}
+.v-PASS{color:var(--pass)} .v-FAIL{color:var(--fail)} .v-CHECK{color:var(--check)} .v-UNCLEAR,.v-ERROR,.v-PENDING,.v-CAPTURED{color:var(--muted)}
 ul.defects{margin:6px 0 0;padding-left:18px}
 ul.defects li{margin:2px 0}
 .sev{font-size:12px;font-weight:600;padding:1px 6px;border-radius:4px;margin-left:4px;background:var(--panel2)}
@@ -303,6 +304,10 @@ nav.tabs .badge.show{display:grid}
             <label class="toggle"><input type="checkbox" id="sSound"> Alarm sound on failures</label>
             <label class="toggle"><input type="checkbox" id="sVib"> Vibrate on failures</label>
             <label class="toggle"><input type="checkbox" id="sCheckAlarm"> Also alarm on "Check" results</label>
+            <div class="row">
+              <button class="btn sm" id="btnTestAlarm" type="button">Send a test alarm</button>
+              <span class="small muted">Sounds the alarm here and on every supervisor phone with alarms on.</span>
+            </div>
           </div>
           <div class="panel">
             <h2>Mounting checklist</h2>
@@ -326,7 +331,7 @@ nav.tabs .badge.show{display:grid}
           <h2 style="margin:0">Inspection log</h2>
           <div class="row">
             <select id="logFilter" class="btn sm" style="min-height:36px;width:auto">
-              <option value="all">All results</option><option value="FAIL">Fail</option><option value="CHECK">Check</option><option value="PASS">Pass</option>
+              <option value="all">All results</option><option value="FAIL">Fail</option><option value="CHECK">Check</option><option value="PASS">Pass</option><option value="CAPTURED">Test captures</option><option value="CAPTURED">Test captures</option>
             </select>
             <button class="btn sm" id="btnExport">Export CSV</button>
             <button class="btn sm" id="btnClear">Clear log</button>
@@ -408,7 +413,7 @@ const deviceId = store.get("qc.device", null) || (() => { const id = Math.random
 
 /* ---------- Site API ---------- */
 let accessCode = store.get("qc.code", "");
-let aiOk = false;
+let aiOk = false, aiNoKey = false;
 const aiPill = $("#aiPill");
 function setAi(state, text){ aiPill.className = "ai-pill " + state; aiPill.textContent = text; }
 async function api(path, opts = {}){
@@ -418,10 +423,12 @@ async function api(path, opts = {}){
   return body;
 }
 async function checkAi(){
+  aiNoKey = false;
   if (!accessCode) { aiOk = false; setAi("bad", "Enter access code"); return; }
   try {
     const r = await api("/api/inspect");
-    aiOk = !!r.apiKey; setAi(aiOk ? "ok" : "bad", aiOk ? "AI ready" : "API key missing");
+    aiOk = !!r.apiKey; aiNoKey = !r.apiKey;
+    setAi(aiOk ? "ok" : "warn", aiOk ? "AI ready" : "Test mode — no AI key");
   } catch (e) {
     aiOk = false; setAi("bad", e.status === 401 ? "Wrong access code" : e.code === "setup" ? "Site not set up" : "Offline");
   }
@@ -569,7 +576,7 @@ $("#btnZone").addEventListener("click", () => setZoning(!zoning));
 const SW = 160; const sc = document.createElement("canvas"); const sctx = sc.getContext("2d", {willReadFrequently:true});
 let bg = null, prevGray = null, state = "EMPTY", presentN = 0, clearN = 0, settleTimer = null;
 let isArmed = false, busy = false;
-const counts = {seen:0, insp:0, pass:0, check:0, fail:0, unclear:0, notInspected:0};
+const counts = {captured:0, seen:0, insp:0, pass:0, check:0, fail:0, unclear:0, notInspected:0};
 function zoneGray(){
   const vw = video.videoWidth, vh = video.videoHeight; if (!vw) return null;
   const SH = Math.round(SW * vh / vw); if (sc.width !== SW || sc.height !== SH) { sc.width = SW; sc.height = SH; }
@@ -616,7 +623,8 @@ function setArmed(on){
   setChip(on ? "Waiting for product" : (camOn ? "Paused" : "Idle"), on ? "" : "warn");
 }
 $("#btnArm").addEventListener("click", () => {
-  if (!isArmed && !aiOk) toast("AI isn't ready (" + aiPill.textContent + "). Products will be counted but not inspected.");
+  if (!isArmed && aiNoKey) toast("Test mode: each product's photo is captured and logged, but not inspected until the AI key is added.");
+  else if (!isArmed && !aiOk) toast("AI isn't ready (" + aiPill.textContent + "). Products will be counted but not inspected.");
   setArmed(!isArmed);
 });
 $("#btnNow").addEventListener("click", () => { if (!camOn) return; if (busy) { toast("Still inspecting the last product."); return; } runInspection(grab(1280), "manual"); });
@@ -631,6 +639,7 @@ async function runInspection(canvas, source){
     thumb:thumbOf(canvas), verdict:"PENDING", summary:"Inspecting…", defects:[], confidence:null};
   renderLast(entry);
   try {
+    if (aiNoKey) { entry.verdict = "CAPTURED"; entry.summary = "Photo captured (test mode, AI not connected yet)."; return; }
     if (!aiOk) { entry.verdict = "ERROR"; entry.summary = "AI isn't ready: " + aiPill.textContent + "."; return; }
     const b64 = c => c.toDataURL("image/jpeg", .85).split(",")[1];
     const payload = {image:b64(canvas), reference: refDataUrl ? refDataUrl.split(",")[1] : "", tier:S.tier === "thorough" ? "thorough" : "fast",
@@ -656,7 +665,8 @@ async function runInspection(canvas, source){
   }
 }
 function finishEntry(entry){
-  if (entry.verdict !== "ERROR") counts.insp++;
+  if (["PASS","CHECK","FAIL","UNCLEAR"].includes(entry.verdict)) counts.insp++;
+  if (entry.verdict === "CAPTURED") counts.captured++;
   if (entry.verdict === "PASS") counts.pass++;
   if (entry.verdict === "CHECK") counts.check++;
   if (entry.verdict === "FAIL") counts.fail++;
@@ -669,7 +679,7 @@ function finishEntry(entry){
 }
 function renderCounts(){
   $("#cInsp").textContent = counts.insp; $("#cPass").textContent = counts.pass; $("#cCheck").textContent = counts.check; $("#cFail").textContent = counts.fail;
-  $("#countNote").textContent = `Products seen: ${counts.seen} · Not inspected (AI busy): ${counts.notInspected} · Unclear photos: ${counts.unclear}`;
+  $("#countNote").textContent = `Products seen: ${counts.seen} · Not inspected (AI busy): ${counts.notInspected} · Unclear photos: ${counts.unclear}` + (counts.captured ? ` · Test captures: ${counts.captured}` : "");
 }
 function defectList(defects){
   const ul = el("ul", {class:"defects"});
@@ -790,6 +800,17 @@ $("#alarmAck").addEventListener("click", async () => {
 });
 let toastTimer = null;
 function toast(msg){ const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 5000); }
+
+$("#btnTestAlarm").addEventListener("click", () => {
+  ensureAudio();
+  let c;
+  if (camOn) c = grab(640);
+  else { c = document.createElement("canvas"); c.width = 320; c.height = 180; const x = c.getContext("2d");
+    x.fillStyle = "#9C6A34"; x.fillRect(0, 0, 320, 180); x.fillStyle = "#fff"; x.font = "bold 40px Barlow Condensed, sans-serif"; x.textAlign = "center"; x.fillText("TEST", 160, 105); }
+  const entry = {ts:Date.now(), line:S.line, job:S.job, verdict:"FAIL", thumb:thumbOf(c),
+    summary:"TEST ALARM — not a real defect.", defects:[{check:"Test", issue:"Alarm test from Setup", severity:"minor"}]};
+  showAlarm(entry); pushEvent(entry);
+});
 
 /* ---------- Boot ---------- */
 bindSetup(); renderCounts(); renderLog(); setChip("Idle", "");
