@@ -144,7 +144,7 @@ ol.steps li{margin:4px 0}
 .empty{padding:28px 12px;text-align:center;color:var(--muted)}
 
 /* Tabs */
-nav.tabs{position:fixed;left:0;right:0;bottom:0;display:grid;grid-template-columns:repeat(5,1fr);background:var(--panel);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);z-index:20}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;display:grid;grid-template-columns:repeat(4,1fr);background:var(--panel);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);z-index:20}
 nav.tabs button{background:none;border:0;height:var(--tab-h);display:grid;place-items:center;align-content:center;gap:2px;color:var(--muted);font-weight:600;font-size:13px;position:relative}
 nav.tabs button svg{width:24px;height:24px}
 nav.tabs button[aria-selected=true]{color:var(--kraft)}
@@ -165,34 +165,6 @@ nav.tabs .badge.show{display:grid}
 .alarm .ack{background:#fff;color:#8E1616;border:0;font-weight:700;font-size:22px;padding:16px 40px;border-radius:10px;min-height:60px}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--tab-h) + 16px + env(safe-area-inset-bottom,0px));z-index:40;background:var(--check);color:#1b1300;padding:12px 18px;border-radius:10px;font-weight:600;max-width:min(92vw,520px);box-shadow:0 6px 20px rgba(0,0,0,.25);display:none}
 .toast.show{display:block}
-/* Dashboard */
-.dash-top{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px}
-.dash-top h2{margin:0;font-size:28px;font-weight:700}
-.machine{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:14px}
-.mhead{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;margin-bottom:10px}
-.mhead h3{margin:0;font-size:24px;font-weight:700}
-.mhead .mstat{font-size:14px;color:var(--muted)}
-.mhead .mcounts{margin-left:auto;font-size:14px;font-weight:600}
-.mcounts .p{color:var(--pass)} .mcounts .c{color:var(--check)} .mcounts .f{color:var(--fail)}
-.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
-.tile{display:block;text-align:left;padding:0;border:2px solid var(--line);border-radius:9px;background:var(--panel2);overflow:hidden}
-.tile.fail{border-color:var(--fail)} .tile.check{border-color:var(--check)}
-.tile.offline{opacity:.6}
-.snap{position:relative;aspect-ratio:16/9;background:var(--stage)}
-.snap img{width:100%;height:100%;object-fit:cover;display:block}
-.snap .none{position:absolute;inset:0;display:grid;place-items:center;color:#9AA6AD;font-size:14px}
-.snap .st{position:absolute;left:6px;top:6px;font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:14px;padding:2px 8px;border-radius:4px;background:rgba(0,0,0,.65);color:#fff}
-.snap .st.on{background:var(--pass)} .snap .st.pause{background:#8A6400}
-.snap .lv{position:absolute;right:6px;top:6px;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:16px;padding:2px 8px;border-radius:4px;color:#fff;background:rgba(0,0,0,.65)}
-.snap .lv.PASS{background:var(--pass)} .snap .lv.FAIL{background:var(--fail)} .snap .lv.CHECK{background:var(--check);color:#1b1300}
-.tinfo{padding:8px 10px}
-.tinfo b{font-size:17px}
-.tinfo .tc{font-size:13px;color:var(--muted)}
-.tinfo .ts{font-size:14px;margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-dialog.cam{border:0;border-radius:12px;padding:0;width:min(760px,94vw);background:var(--panel);color:var(--ink)}
-dialog.cam::backdrop{background:rgba(0,0,0,.6)}
-dialog.cam img{width:100%;display:block;background:#000;max-height:60vh;object-fit:contain}
-dialog.cam .body{padding:14px}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 </style>
 </head>
@@ -256,10 +228,7 @@ dialog.cam .body{padding:14px}
               <div class="count c"><strong id="cCheck">0</strong><span>Check</span></div>
               <div class="count f"><strong id="cFail">0</strong><span>Fail</span></div>
             </div>
-            <div class="row" style="margin-top:10px;justify-content:space-between">
-              <p class="small muted" style="margin:0" id="countNote">Products seen: 0 · Not inspected: 0</p>
-              <button class="btn sm" id="btnReset" type="button">Reset counts</button>
-            </div>
+            <p class="small muted" style="margin:10px 0 0" id="countNote">Products seen: 0 · Not inspected: 0</p>
           </div>
           <div class="panel">
             <h2>Last inspection</h2>
@@ -267,19 +236,6 @@ dialog.cam .body{padding:14px}
           </div>
         </div>
       </div>
-    </section>
-
-    <!-- DASHBOARD -->
-    <section class="view" id="v-dash" aria-label="Dashboard">
-      <div class="dash-top">
-        <h2 class="cond">All cameras</h2>
-        <div class="row">
-          <select id="dashMachine" class="btn sm" style="width:auto"><option value="all">All machines</option></select>
-          <span class="small muted" id="dashUpdated"></span>
-        </div>
-      </div>
-      <div id="dashBody"><div class="empty">Loading cameras…</div></div>
-      <p class="small muted">Pictures refresh about every 20 seconds, and right away after each inspection. Tap a camera for a bigger view.</p>
     </section>
 
     <!-- SETUP -->
@@ -291,14 +247,8 @@ dialog.cam .body{padding:14px}
             <span class="hint">Ask your plant manager. Each device needs it once.</span>
             <input type="text" id="sCode" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Access code">
           </label>
-          <label class="f">Machine
-            <span class="hint">Every camera on the same machine must use the exact same name.</span>
-            <input type="text" id="sLine" list="machineList" placeholder="e.g. Flexo Folder Gluer 1">
-            <datalist id="machineList"></datalist>
-          </label>
-          <label class="f">Camera position on this machine
-            <input type="text" id="sPos" list="posList" placeholder="e.g. Top — print side">
-            <datalist id="posList"><option value="Top — print side"><option value="Side — glue joint"><option value="Feed end"><option value="Delivery / stacker"><option value="Bundle outfeed"></datalist>
+          <label class="f">Line or machine
+            <input type="text" id="sLine" placeholder="e.g. Flexo Folder Gluer 1">
           </label>
           <label class="f">Job / product
             <input type="text" id="sJob" placeholder="e.g. RSC 12x10x8, 2-color, customer ABC">
@@ -406,7 +356,6 @@ dialog.cam .body{padding:14px}
 
   <nav class="tabs" role="tablist">
     <button role="tab" aria-selected="true" data-v="inspect"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Inspect</button>
-    <button role="tab" aria-selected="false" data-v="dash"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="8" height="7" rx="1"/><rect x="13" y="4" width="8" height="7" rx="1"/><rect x="3" y="13" width="8" height="7" rx="1"/><rect x="13" y="13" width="8" height="7" rx="1"/></svg>Dashboard</button>
     <button role="tab" aria-selected="false" data-v="setup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Setup</button>
     <button role="tab" aria-selected="false" data-v="log"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h7M9 7h3"/></svg>Log</button>
     <button role="tab" aria-selected="false" data-v="alerts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>Alerts<span class="badge" id="alertBadge">0</span></button>
@@ -422,18 +371,6 @@ dialog.cam .body{padding:14px}
   <button class="ack" id="alarmAck">Acknowledge</button>
 </div>
 <div class="toast" id="toast" role="status"></div>
-<dialog class="cam" id="camDlg">
-  <img id="dlgImg" alt="Camera view">
-  <div class="body">
-    <h2 class="cond" style="margin:0;font-size:24px" id="dlgTitle"></h2>
-    <div class="small muted" id="dlgMeta"></div>
-    <div id="dlgLast" style="margin-top:8px"></div>
-    <div class="row" style="margin-top:12px;justify-content:flex-end">
-      <button class="btn sm" id="dlgRemove" type="button">Remove this camera</button>
-      <button class="btn sm primary" id="dlgClose" type="button">Close</button>
-    </div>
-  </div>
-</dialog>
 
 <script>
 (() => {
@@ -466,7 +403,7 @@ const CHECKS = [
   {id:"bundle", label:"Bundle & strapping",           hint:"Straps present, bundle square and even"},
   {id:"tag",    label:"Load tag",                     hint:"Tag present and readable"}
 ];
-const DEFAULTS = {line:"", position:"", job:"", checks:["print","ink","score","die","joint","damage"], notes:"",
+const DEFAULTS = {line:"", job:"", checks:["print","ink","score","die","joint","damage"], notes:"",
   tier:"fast", everyN:1, sens:6, settle:250, sound:true, vibrate:true, checkAlarm:false,
   zone:{x:.25, y:.08, w:.5, h:.84}};
 const S = Object.assign({}, DEFAULTS, store.get("qc.settings", {}));
@@ -506,7 +443,6 @@ document.querySelectorAll("nav.tabs button").forEach(b => b.addEventListener("cl
   document.querySelectorAll("nav.tabs button").forEach(x => x.setAttribute("aria-selected", x === b));
   document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.id === "v-" + b.dataset.v));
   if (b.dataset.v === "alerts") { unseenAlerts = 0; updateBadge(); }
-  if (b.dataset.v === "dash") pollStations();
   window.scrollTo(0, 0);
 }));
 
@@ -520,7 +456,7 @@ function bindSetup(){
     box.append(el("label", {}, cb, el("span", {}, c.label, el("small", {text:c.hint}))));
   });
   const txt = (id, key, after) => { const i = $(id); i.value = S[key]; i.addEventListener("input", () => { S[key] = i.value; save(); after && after(); }); };
-  txt("#sLine", "line", updateHeader); txt("#sPos", "position", updateHeader); txt("#sJob", "job", updateHeader); txt("#sNotes", "notes");
+  txt("#sLine", "line", updateHeader); txt("#sJob", "job", updateHeader); txt("#sNotes", "notes");
   const sel = (id, key, num) => { const i = $(id); i.value = String(S[key]); i.addEventListener("change", () => { S[key] = num ? Number(i.value) : i.value; save(); }); };
   sel("#sTier", "tier"); sel("#sEveryN", "everyN", true);
   const rng = (id, key, out, fmt) => { const i = $(id); i.value = S[key]; const upd = () => { $(out).textContent = fmt(S[key]); };
@@ -533,7 +469,7 @@ function bindSetup(){
   tog("#sSound", "sound"); tog("#sVib", "vibrate"); tog("#sCheckAlarm", "checkAlarm");
   renderRef(); updateHeader();
 }
-function updateHeader(){ $("#hdrSub").textContent = [S.line || "No machine set", S.position, S.job].filter(Boolean).join(" — "); hbDirty = true; }
+function updateHeader(){ $("#hdrSub").textContent = [S.line || "No line set", S.job].filter(Boolean).join(" — "); }
 function renderRef(){
   const ph = $("#refPh"); ph.textContent = "";
   if (refDataUrl) ph.append(el("img", {src:refDataUrl, alt:"Good sample"})); else ph.textContent = "No sample yet";
@@ -568,7 +504,6 @@ async function startCamera(){
     bg = null; $("#bgTip").hidden = false;
     requestWake(); resizeOverlay();
     clearInterval(loopTimer); loopTimer = setInterval(tick, 100);
-    setTimeout(() => heartbeat(true), 1500);
   } catch (e) {
     const msg = e && e.name === "NotAllowedError" ? "Camera permission was blocked. Allow camera access for this page, then try again."
       : e && e.name === "NotFoundError" ? "No camera was found on this device."
@@ -583,7 +518,7 @@ function stopCamera(){
   $("#stageEmpty").hidden = false; $("#meter").hidden = true; $("#bgTip").hidden = true;
   ["#btnArm","#btnBg","#btnZone","#btnNow","#btnFlip"].forEach(s => $(s).disabled = true);
   $("#btnCam").textContent = "Start camera"; $("#btnCam").className = "btn primary";
-  setChip("Idle", ""); releaseWake(); drawOverlay(); heartbeat(true);
+  setChip("Idle", ""); releaseWake(); drawOverlay();
 }
 $("#btnCam").addEventListener("click", () => camOn ? stopCamera() : startCamera());
 $("#btnFlip").addEventListener("click", async () => { facing = facing === "environment" ? "user" : "environment"; const armed = isArmed; stopCamera(); await startCamera(); if (armed) setArmed(true); });
@@ -686,7 +621,6 @@ function setArmed(on){
   isArmed = on; clearTimeout(settleTimer); state = "EMPTY"; presentN = clearN = 0;
   const b = $("#btnArm"); b.textContent = on ? "Pause inspecting" : "Start inspecting"; b.className = "btn grow " + (on ? "stop" : "go");
   setChip(on ? "Waiting for product" : (camOn ? "Paused" : "Idle"), on ? "" : "warn");
-  hbDirty = true;
 }
 $("#btnArm").addEventListener("click", () => {
   if (!isArmed && aiNoKey) toast("Test mode: each product's photo is captured and logged, but not inspected until the AI key is added.");
@@ -701,7 +635,7 @@ function setChip(t, cls){ const c = $("#chipState"); c.textContent = t; c.classN
 /* ---------- AI inspection (prompt is built on the server) ---------- */
 async function runInspection(canvas, source){
   busy = true; setChip("Inspecting…", "busy");
-  const entry = {id:Date.now().toString(36) + Math.random().toString(36).slice(2, 5), ts:Date.now(), line:S.line, position:S.position, job:S.job, source,
+  const entry = {id:Date.now().toString(36) + Math.random().toString(36).slice(2, 5), ts:Date.now(), line:S.line, job:S.job, source,
     thumb:thumbOf(canvas), verdict:"PENDING", summary:"Inspecting…", defects:[], confidence:null};
   renderLast(entry);
   try {
@@ -738,7 +672,6 @@ function finishEntry(entry){
   if (entry.verdict === "FAIL") counts.fail++;
   if (entry.verdict === "UNCLEAR") counts.unclear++;
   renderCounts(); renderLast(entry);
-  if (entry.verdict !== "ERROR") { lastResult = entry; hbDirty = true; }
   log.unshift(entry); if (log.length > 150) log.length = 150; store.set("qc.log", log); renderLog();
   if (entry.verdict === "FAIL" || (entry.verdict === "CHECK" && S.checkAlarm)) { showAlarm(entry); pushEvent(entry); }
   else if (entry.verdict === "CHECK") { chirp(); toast("Check: " + entry.summary); pushEvent(entry); }
@@ -769,16 +702,16 @@ function renderLog(){
   const rows = log.filter(e => f === "all" || e.verdict === f);
   if (!rows.length) { list.append(el("div", {class:"empty", text:"No inspections to show."})); return; }
   rows.forEach(e => list.append(el("div", {class:"item"}, el("img", {src:e.thumb, alt:"", loading:"lazy"}),
-    el("div", {}, el("div", {class:"sum", text:e.summary}), el("div", {class:"meta", text:fmtDate(e.ts) + (e.line ? " · " + e.line : "") + (e.position ? " · " + e.position : "")})),
+    el("div", {}, el("div", {class:"sum", text:e.summary}), el("div", {class:"meta", text:fmtDate(e.ts) + (e.line ? " · " + e.line : "")})),
     el("div", {class:"v v-" + e.verdict, text:e.verdict}))));
 }
 $("#logFilter").addEventListener("change", renderLog);
 $("#btnClear").addEventListener("click", () => { if (!confirm("Clear the inspection log on this device?")) return; log = []; store.set("qc.log", log); renderLog(); });
 $("#btnExport").addEventListener("click", async () => {
   const q = v => '"' + String(v ?? "").replace(/"/g, '""') + '"';
-  const lines = [["Date","Time","Machine","Camera","Job","Result","Summary","Defects","Confidence","Trigger"].join(",")];
+  const lines = [["Date","Time","Line","Job","Result","Summary","Defects","Confidence","Trigger"].join(",")];
   log.slice().reverse().forEach(e => { const d = new Date(e.ts);
-    lines.push([d.toLocaleDateString(), d.toLocaleTimeString(), e.line, e.position || "", e.job, e.verdict, e.summary,
+    lines.push([d.toLocaleDateString(), d.toLocaleTimeString(), e.line, e.job, e.verdict, e.summary,
       e.defects.map(x => `${x.check}: ${x.issue} (${x.severity})`).join("; "), e.confidence ?? "", e.source].map(q).join(",")); });
   const url = URL.createObjectURL(new Blob([lines.join("\n")], {type:"text/csv"}));
   const a = el("a", {href:url, download:`qc-log-${new Date().toISOString().slice(0,10)}.csv`}); document.body.append(a); a.click(); a.remove();
@@ -793,7 +726,7 @@ function updateBadge(){ const b = $("#alertBadge"); b.textContent = unseenAlerts
 async function pushEvent(entry){
   if (!accessCode) return;
   try {
-    const r = await api("/api/events", {method:"POST", body:JSON.stringify({ts:entry.ts, line:entry.line || "", position:S.position || "", job:entry.job || "", verdict:entry.verdict,
+    const r = await api("/api/events", {method:"POST", body:JSON.stringify({ts:entry.ts, line:entry.line || "", job:entry.job || "", verdict:entry.verdict,
       summary:entry.summary, defects:entry.defects.map(d => `${d.check}: ${d.issue} (${d.severity})`).join("; "), thumb:entry.thumb, device:deviceId})});
     entry.eventId = r.id;
   } catch {}
@@ -810,7 +743,7 @@ async function pollEvents(){
       if (seenEvents.has(d.id)) return; seenEvents.add(d.id);
       if (firstPoll || d.device === deviceId || d.ts < feedStart) return;
       if (!onAlerts) { unseenAlerts++; updateBadge(); }
-      if (d.verdict === "FAIL" && supAlarm.checked && !d.ack) showAlarm({verdict:"FAIL", line:d.line, position:d.position, job:d.job, ts:d.ts, thumb:d.thumb, summary:d.summary, eventId:d.id,
+      if (d.verdict === "FAIL" && supAlarm.checked && !d.ack) showAlarm({verdict:"FAIL", line:d.line, job:d.job, ts:d.ts, thumb:d.thumb, summary:d.summary, eventId:d.id,
         defects:d.defects ? d.defects.split("; ").map(s => ({check:"", issue:s, severity:""})) : []}, true);
     });
     firstPoll = false;
@@ -827,7 +760,7 @@ function renderSup(events){
     const ackBtn = d.ack ? el("span", {class:"small muted", text:"Acknowledged"}) :
       el("button", {class:"btn sm", text:"Acknowledge", onclick:() => ackEvent(d.id)});
     list.append(el("div", {class:"item" + (d.ack ? " acked" : "")}, el("img", {src:d.thumb || "", alt:"", loading:"lazy"}),
-      el("div", {}, el("div", {class:"v v-" + d.verdict, text:d.verdict + (d.line ? " — " + d.line : "") + (d.position ? " · " + d.position : "")}), el("div", {class:"sum", text:d.summary}),
+      el("div", {}, el("div", {class:"v v-" + d.verdict, text:d.verdict + (d.line ? " — " + d.line : "")}), el("div", {class:"sum", text:d.summary}),
         el("div", {class:"meta", text:fmtDate(d.ts) + (d.job ? " · " + d.job : "")})), ackBtn));
   });
 }
@@ -849,7 +782,7 @@ function showAlarm(entry, remote){
   currentAlarm = entry; extraFails = 0; $("#alarmMore").textContent = "";
   a.style.background = entry.verdict === "CHECK" ? "var(--check)" : "";
   $("#alarmTitle").textContent = entry.verdict;
-  $("#alarmWhere").textContent = [entry.line || "Machine not set", entry.position || (remote ? "" : S.position), entry.job, fmtTime(entry.ts)].filter(Boolean).join(" · ");
+  $("#alarmWhere").textContent = [entry.line || "Line not set", entry.job, fmtTime(entry.ts)].filter(Boolean).join(" · ");
   $("#alarmImg").src = entry.thumb;
   const ul = $("#alarmList"); ul.textContent = "";
   ul.append(el("li", {text:entry.summary}));
@@ -877,119 +810,6 @@ $("#btnTestAlarm").addEventListener("click", () => {
   const entry = {ts:Date.now(), line:S.line, job:S.job, verdict:"FAIL", thumb:thumbOf(c),
     summary:"TEST ALARM — not a real defect.", defects:[{check:"Test", issue:"Alarm test from Setup", severity:"minor"}]};
   showAlarm(entry); pushEvent(entry);
-});
-
-/* ---------- Station heartbeat (this device reports to the dashboard) ---------- */
-let hbDirty = true, lastHb = 0, hbBusy = false, lastResult = null;
-async function heartbeat(force){
-  if (!accessCode || hbBusy) return;
-  const now = Date.now();
-  if (!force) {
-    if (!camOn) return;
-    if (!(now - lastHb >= 20000 || (hbDirty && now - lastHb >= 10000))) return;
-  }
-  hbBusy = true; hbDirty = false; lastHb = now;
-  try {
-    let snap = "";
-    if (camOn && video.videoWidth) snap = grab(400).toDataURL("image/jpeg", .6);
-    await api("/api/stations", {method:"POST", body:JSON.stringify({id:deviceId, machine:S.line, position:S.position, job:S.job,
-      camOn, armed:isArmed, aiReady:aiOk, counts, snap,
-      last: lastResult ? {verdict:lastResult.verdict, summary:lastResult.summary, ts:lastResult.ts, thumb:lastResult.thumb} : null})});
-  } catch {}
-  finally { hbBusy = false; }
-}
-setInterval(() => heartbeat(false), 5000);
-
-/* ---------- Dashboard ---------- */
-let stations = [], serverSkew = 0, dashBusy = false;
-const ONLINE_MS = 50000;
-function ago(ts){ const s = Math.max(0, Math.round((Date.now() - serverSkew - ts) / 1000));
-  return s < 60 ? s + "s ago" : s < 3600 ? Math.round(s / 60) + " min ago" : Math.round(s / 3600) + " h ago"; }
-async function pollStations(){
-  if (!accessCode || dashBusy) return;
-  dashBusy = true;
-  try {
-    const r = await api("/api/stations");
-    serverSkew = Date.now() - r.now; stations = r.stations || [];
-    renderDash(); refreshMachineList();
-    $("#dashUpdated").textContent = "Updated " + new Date().toLocaleTimeString([], {hour:"2-digit", minute:"2-digit", second:"2-digit"});
-  } catch (e) {
-    $("#dashBody").textContent = ""; $("#dashBody").append(el("div", {class:"empty", text: e.status === 401 ? "Enter the access code in Setup to see the cameras." : "Can't reach the site. Check Wi-Fi."}));
-  } finally { dashBusy = false; }
-}
-setInterval(() => { if (document.visibilityState === "visible" && $("#v-dash").classList.contains("on")) pollStations(); }, 6000);
-function stationState(st){
-  const online = (Date.now() - serverSkew - st.lastSeen) < ONLINE_MS;
-  if (!online) return {online:false, label:"Offline", cls:""};
-  if (!st.camOn) return {online:true, label:"Camera off", cls:""};
-  if (st.armed) return {online:true, label:"Inspecting", cls:"on"};
-  return {online:true, label:"Paused", cls:"pause"};
-}
-function refreshMachineList(){
-  const names = [...new Set(stations.map(s => s.machine))].sort();
-  const dl = $("#machineList"); dl.textContent = ""; names.forEach(n => dl.append(el("option", {value:n})));
-  const sel = $("#dashMachine"), cur = sel.value; sel.textContent = "";
-  sel.append(el("option", {value:"all", text:"All machines"}));
-  names.forEach(n => sel.append(el("option", {value:n, text:n})));
-  sel.value = names.includes(cur) ? cur : "all";
-}
-$("#dashMachine").addEventListener("change", renderDash);
-function renderDash(){
-  const body = $("#dashBody"); body.textContent = "";
-  const f = $("#dashMachine").value;
-  const list = stations.filter(s => f === "all" || s.machine === f);
-  if (!list.length) { body.append(el("div", {class:"empty", text:"No cameras yet. Open this site on a phone or tablet, set the machine and camera position in Setup, and start the camera."})); return; }
-  const groups = {};
-  list.forEach(s => (groups[s.machine] = groups[s.machine] || []).push(s));
-  Object.keys(groups).sort().forEach(m => {
-    const cams = groups[m].sort((a, b) => a.position.localeCompare(b.position));
-    const on = cams.filter(c => stationState(c).online && c.camOn).length;
-    const t = cams.reduce((a, c) => ({p:a.p + c.counts.pass, c:a.c + c.counts.check, f:a.f + c.counts.fail}), {p:0, c:0, f:0});
-    const tiles = el("div", {class:"tiles"});
-    cams.forEach(c => tiles.append(tile(c)));
-    body.append(el("div", {class:"machine"},
-      el("div", {class:"mhead"}, el("h3", {class:"cond", text:m}),
-        el("span", {class:"mstat", text:`${cams.length} camera${cams.length > 1 ? "s" : ""} · ${on} running`}),
-        el("span", {class:"mcounts"}, el("span", {class:"p", text:"Pass " + t.p}), " · ", el("span", {class:"c", text:"Check " + t.c}), " · ", el("span", {class:"f", text:"Fail " + t.f}))),
-      tiles));
-  });
-}
-function tile(c){
-  const s = stationState(c), last = c.last;
-  const recentBad = last && ["FAIL","CHECK"].includes(last.verdict) && (Date.now() - serverSkew - last.ts) < 5 * 60000;
-  const snap = el("div", {class:"snap"});
-  if (c.snap && s.online && c.camOn) snap.append(el("img", {src:c.snap, alt:"", loading:"lazy"}));
-  else if (last && last.thumb) snap.append(el("img", {src:last.thumb, alt:"", loading:"lazy"}));
-  else snap.append(el("div", {class:"none", text:"No picture"}));
-  snap.append(el("span", {class:"st " + s.cls, text:s.label}));
-  if (last && last.verdict) snap.append(el("span", {class:"lv " + last.verdict, text:last.verdict}));
-  const n = c.counts;
-  return el("button", {class:"tile" + (s.online ? "" : " offline") + (recentBad ? " " + last.verdict.toLowerCase() : ""), type:"button", onclick:() => openCam(c)},
-    snap,
-    el("div", {class:"tinfo"}, el("b", {text:c.position}),
-      el("div", {class:"tc", text:`Pass ${n.pass} · Check ${n.check} · Fail ${n.fail}` + (s.online ? "" : " · seen " + ago(c.lastSeen)) + (c.aiReady || !s.online ? "" : " · AI not ready")}),
-      last ? el("div", {class:"ts", text:last.verdict + " " + ago(last.ts) + " — " + last.summary}) : el("div", {class:"ts muted", text:"No inspections yet"})));
-}
-let dlgStation = null;
-function openCam(c){
-  dlgStation = c; const s = stationState(c);
-  $("#dlgImg").src = (c.snap && s.online && c.camOn) ? c.snap : (c.last && c.last.thumb) || "";
-  $("#dlgTitle").textContent = c.machine + " — " + c.position;
-  $("#dlgMeta").textContent = [s.label, c.job, "last report " + ago(c.lastSeen)].filter(Boolean).join(" · ");
-  const box = $("#dlgLast"); box.textContent = "";
-  if (c.last) box.append(el("div", {}, el("span", {class:"verdict v-" + c.last.verdict, style:"font-size:24px", text:c.last.verdict + " "}), el("span", {class:"small muted", text:ago(c.last.ts)})), el("div", {text:c.last.summary}));
-  $("#dlgRemove").hidden = s.online;
-  $("#camDlg").showModal();
-}
-$("#dlgClose").addEventListener("click", () => $("#camDlg").close());
-$("#dlgRemove").addEventListener("click", async () => {
-  if (!dlgStation || !confirm("Remove this camera from the dashboard? It comes back if that device starts its camera again.")) return;
-  try { await api("/api/stations?id=" + encodeURIComponent(dlgStation.id), {method:"DELETE"}); } catch {}
-  $("#camDlg").close(); pollStations();
-});
-$("#btnReset").addEventListener("click", () => {
-  if (!confirm("Reset this camera's counts to zero?")) return;
-  Object.keys(counts).forEach(k => counts[k] = 0); renderCounts(); hbDirty = true;
 });
 
 /* ---------- Boot ---------- */
