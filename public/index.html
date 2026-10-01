@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Line QC Camera</title>
+<meta name="theme-color" content="#9C6A34">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Line QC">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#E9ECEB; --panel:#FFFFFF; --panel2:#F4F6F5; --ink:#1C2226; --muted:#5B666D; --line:#CBD2D6;
+  --kraft:#9C6A34; --kraft-soft:#F1E4D3; --zone:#F2C200;
+  --pass:#1F8A4C; --check:#B87C00; --fail:#C62828; --stage:#0E1113;
+  --tab-h:64px;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#15191C; --panel:#1F2529; --panel2:#262D32; --ink:#E7ECEE; --muted:#9AA6AD; --line:#343E44;
+    --kraft:#D19B5E; --kraft-soft:#3A2D1F; --pass:#3DBE72; --check:#F0B429; --fail:#FF5A52; --stage:#000;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#15191C; --panel:#1F2529; --panel2:#262D32; --ink:#E7ECEE; --muted:#9AA6AD; --line:#343E44;
+  --kraft:#D19B5E; --kraft-soft:#3A2D1F; --pass:#3DBE72; --check:#F0B429; --fail:#FF5A52; --stage:#000;
+}
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{height:100%;margin:0;background:var(--bg);color:var(--ink);
+  font-family:"Barlow",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased}
+h1,h2,h3,.cond{font-family:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;letter-spacing:.01em}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--zone);outline-offset:2px}
+
+.app{min-height:100%;display:flex;flex-direction:column}
+header.top{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.mark{width:34px;height:34px;border-radius:6px;background:var(--kraft);display:grid;place-items:center;flex:none}
+.mark svg{width:22px;height:22px}
+.brand h1{margin:0;font-size:22px;font-weight:700;line-height:1}
+.brand .sub{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ai-pill{margin-left:auto;background:none;font-size:13px;padding:4px 10px;border-radius:99px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.ai-pill.ok{border-color:var(--pass);color:var(--pass)}
+.ai-pill.bad{border-color:var(--fail);color:var(--fail)}
+
+main{flex:1;padding:14px 14px calc(var(--tab-h) + 24px + env(safe-area-inset-bottom,0px));max-width:1280px;width:100%;margin:0 auto}
+.view{display:none}.view.on{display:block}
+
+/* Inspect view */
+.inspect-grid{display:grid;gap:14px}
+@media (min-width:900px){.inspect-grid{grid-template-columns:minmax(0,1.6fr) minmax(300px,1fr);align-items:start}}
+.stage-wrap{display:flex;justify-content:center;background:var(--stage);border-radius:10px;overflow:hidden}
+.stage{position:relative;width:100%;aspect-ratio:16/9;max-width:var(--stage-max,100%);background:var(--stage)}
+.stage video{position:absolute;inset:0;width:100%;height:100%;object-fit:fill;display:block}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+.stage.zoning canvas{cursor:crosshair}
+.stage-empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:#C9D1D5;padding:20px}
+.stage-empty p{margin:6px 0 0;max-width:34ch;font-size:15px;color:#9AA6AD}
+.status-band{position:absolute;left:0;right:0;top:0;display:flex;justify-content:space-between;gap:8px;padding:8px;pointer-events:none}
+.chip{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:16px;padding:3px 10px;border-radius:5px;background:rgba(0,0,0,.62);color:#fff}
+.chip.live{background:var(--pass)}
+.chip.busy{background:#2F6FB5}
+.chip.warn{background:#8A6400}
+.meter{position:absolute;left:10px;right:10px;bottom:10px;height:8px;border-radius:4px;background:rgba(255,255,255,.18);overflow:hidden;pointer-events:none}
+.meter i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--zone);transition:width .1s linear}
+.meter b{position:absolute;left:50%;top:-2px;bottom:-2px;width:2px;background:#fff}
+
+.controls{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.btn{border:1px solid var(--line);background:var(--panel);padding:11px 16px;border-radius:8px;font-weight:600;min-height:46px}
+.btn.primary{background:var(--kraft);border-color:var(--kraft);color:#fff}
+.btn.go{background:var(--pass);border-color:var(--pass);color:#fff}
+.btn.stop{background:var(--fail);border-color:var(--fail);color:#fff}
+.btn.on{outline:2px solid var(--zone);outline-offset:-2px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.sm{padding:7px 12px;min-height:36px;font-size:14px}
+.grow{flex:1 1 auto}
+
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.panel h2{margin:0 0 8px;font-size:20px;font-weight:600}
+.panel + .panel{margin-top:14px}
+.muted{color:var(--muted)}
+.small{font-size:14px}
+
+.counts{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.count{background:var(--panel2);border-radius:8px;padding:8px 6px;text-align:center}
+.count strong{display:block;font-family:"Barlow Condensed",sans-serif;font-size:30px;line-height:1.05;font-weight:700}
+.count span{font-size:13px;color:var(--muted)}
+.count.p strong{color:var(--pass)} .count.f strong{color:var(--fail)} .count.c strong{color:var(--check)}
+
+.result{display:grid;grid-template-columns:96px 1fr;gap:12px;align-items:start}
+.result img{width:96px;height:72px;object-fit:cover;border-radius:6px;background:var(--panel2)}
+.verdict{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:34px;line-height:1}
+.v-PASS{color:var(--pass)} .v-FAIL{color:var(--fail)} .v-CHECK{color:var(--check)} .v-UNCLEAR,.v-ERROR,.v-PENDING{color:var(--muted)}
+ul.defects{margin:6px 0 0;padding-left:18px}
+ul.defects li{margin:2px 0}
+.sev{font-size:12px;font-weight:600;padding:1px 6px;border-radius:4px;margin-left:4px;background:var(--panel2)}
+.sev.major{background:var(--fail);color:#fff}
+
+.notice{border-left:4px solid var(--check);background:var(--panel2);padding:10px 12px;border-radius:0 8px 8px 0;font-size:14px;margin-top:10px}
+.notice.bad{border-color:var(--fail)}
+
+/* Setup */
+.form{display:grid;gap:14px}
+@media (min-width:900px){.setup-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}.setup-grid .panel + .panel{margin-top:0}}
+label.f{display:grid;gap:4px;font-weight:600;font-size:15px}
+label.f .hint{font-weight:400;color:var(--muted);font-size:13px}
+input[type=text],input[type=number],select,textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);min-height:44px}
+textarea{min-height:80px;resize:vertical}
+input[type=range]{width:100%;accent-color:var(--kraft)}
+.checks{display:grid;gap:6px}
+.checks label{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel2)}
+.checks input{width:20px;height:20px;margin-top:2px;accent-color:var(--kraft);flex:none}
+.checks small{display:block;color:var(--muted);font-size:13px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.toggle{display:flex;gap:10px;align-items:center;font-weight:500}
+.toggle input{width:20px;height:20px;accent-color:var(--kraft)}
+.ref{display:grid;grid-template-columns:140px 1fr;gap:12px;align-items:center}
+.ref .ph{width:140px;height:105px;border-radius:8px;border:2px dashed var(--line);display:grid;place-items:center;color:var(--muted);font-size:13px;text-align:center;overflow:hidden;background:var(--panel2)}
+.ref .ph img{width:100%;height:100%;object-fit:cover}
+ol.steps{margin:0;padding-left:20px}
+ol.steps li{margin:4px 0}
+
+/* Log & supervisor */
+.list{display:grid;gap:8px}
+.item{display:grid;grid-template-columns:76px 1fr auto;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px}
+.item img{width:76px;height:57px;object-fit:cover;border-radius:5px;background:var(--panel2)}
+.item .v{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:20px;line-height:1}
+.item .meta{font-size:13px;color:var(--muted)}
+.item .sum{font-size:14px}
+.item.acked{opacity:.6}
+.empty{padding:28px 12px;text-align:center;color:var(--muted)}
+
+/* Tabs */
+nav.tabs{position:fixed;left:0;right:0;bottom:0;display:grid;grid-template-columns:repeat(4,1fr);background:var(--panel);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);z-index:20}
+nav.tabs button{background:none;border:0;height:var(--tab-h);display:grid;place-items:center;align-content:center;gap:2px;color:var(--muted);font-weight:600;font-size:13px;position:relative}
+nav.tabs button svg{width:24px;height:24px}
+nav.tabs button[aria-selected=true]{color:var(--kraft)}
+nav.tabs button[aria-selected=true]::before{content:"";position:absolute;top:0;left:22%;right:22%;height:3px;background:var(--kraft);border-radius:0 0 3px 3px}
+nav.tabs .badge{position:absolute;top:8px;left:calc(50% + 8px);min-width:18px;height:18px;border-radius:9px;background:var(--fail);color:#fff;font-size:11px;display:none;place-items:center;padding:0 5px}
+nav.tabs .badge.show{display:grid}
+
+/* Alarm */
+.alarm{position:fixed;inset:0;z-index:50;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:calc(24px + env(safe-area-inset-top,0px)) 20px calc(24px + env(safe-area-inset-bottom,0px));background:var(--fail);color:#fff;text-align:center}
+.alarm.show{display:flex}
+.alarm.pulse{animation:pulse 1s steps(2,jump-none) infinite}
+@keyframes pulse{50%{background:#7E1111}}
+@media (prefers-reduced-motion:reduce){.alarm.pulse{animation:none}}
+.alarm h2{margin:0;font-size:clamp(52px,14vw,110px);line-height:.9;font-weight:700}
+.alarm .where{font-size:20px;font-weight:600}
+.alarm img{max-width:min(420px,80vw);max-height:32vh;border-radius:8px;border:3px solid #fff;object-fit:contain;background:#000}
+.alarm ul{margin:0;padding:0;list-style:none;font-size:18px;max-width:36ch}
+.alarm .ack{background:#fff;color:#8E1616;border:0;font-weight:700;font-size:22px;padding:16px 40px;border-radius:10px;min-height:60px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--tab-h) + 16px + env(safe-area-inset-bottom,0px));z-index:40;background:var(--check);color:#1b1300;padding:12px 18px;border-radius:10px;font-weight:600;max-width:min(92vw,520px);box-shadow:0 6px 20px rgba(0,0,0,.25);display:none}
+.toast.show{display:block}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <div class="mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round"><path d="M3 8l9-4 9 4-9 4-9-4z"/><path d="M3 8v8l9 4 9-4V8"/><path d="M12 12v8"/></svg>
+      </div>
+      <div style="min-width:0">
+        <h1>Line QC Camera</h1>
+        <div class="sub" id="hdrSub">No line set</div>
+      </div>
+    </div>
+    <button class="ai-pill" id="aiPill" type="button">Checking AI…</button>
+  </header>
+
+  <main>
+    <!-- INSPECT -->
+    <section class="view on" id="v-inspect" aria-label="Inspect">
+      <div class="inspect-grid">
+        <div>
+          <div class="stage-wrap">
+            <div class="stage" id="stage">
+              <video id="video" playsinline muted></video>
+              <canvas id="overlay"></canvas>
+              <div class="stage-empty" id="stageEmpty">
+                <div>
+                  <div class="cond" style="font-size:24px;font-weight:600;color:#fff">Camera is off</div>
+                  <p>Mount the device over the conveyor, then tap Start camera.</p>
+                </div>
+              </div>
+              <div class="status-band"><span class="chip" id="chipState">Idle</span><span class="chip" id="chipZone" hidden>Drag to draw the trigger zone</span></div>
+              <div class="meter" id="meter" hidden><i id="meterFill"></i><b></b></div>
+            </div>
+          </div>
+          <div class="controls">
+            <button class="btn primary" id="btnCam">Start camera</button>
+            <button class="btn go grow" id="btnArm" disabled>Start inspecting</button>
+            <button class="btn" id="btnBg" disabled>Learn empty belt</button>
+            <button class="btn" id="btnZone" disabled>Set trigger zone</button>
+            <button class="btn" id="btnNow" disabled>Inspect now</button>
+            <button class="btn" id="btnFlip" disabled>Switch camera</button>
+          </div>
+          <div class="notice bad" id="camErr" hidden></div>
+          <div class="notice" id="bgTip" hidden>Triggering works best after you tap <b>Learn empty belt</b> with nothing in the yellow zone.</div>
+          <div class="notice" id="photoFallback" hidden>
+            Live camera isn't available here. You can still inspect one product at a time:
+            <div class="row" style="margin-top:8px"><label class="btn sm primary" for="snapInput">Take a photo to inspect</label>
+            <input id="snapInput" type="file" accept="image/*" capture="environment" class="sr"></div>
+          </div>
+        </div>
+
+        <div>
+          <div class="panel">
+            <h2>This run</h2>
+            <div class="counts">
+              <div class="count"><strong id="cInsp">0</strong><span>Inspected</span></div>
+              <div class="count p"><strong id="cPass">0</strong><span>Pass</span></div>
+              <div class="count c"><strong id="cCheck">0</strong><span>Check</span></div>
+              <div class="count f"><strong id="cFail">0</strong><span>Fail</span></div>
+            </div>
+            <p class="small muted" style="margin:10px 0 0" id="countNote">Products seen: 0 · Not inspected: 0</p>
+          </div>
+          <div class="panel">
+            <h2>Last inspection</h2>
+            <div id="lastResult" class="empty" style="padding:14px 0">Nothing inspected yet.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SETUP -->
+    <section class="view" id="v-setup" aria-label="Setup">
+      <div class="setup-grid">
+        <div class="panel form">
+          <h2>Line and job</h2>
+          <label class="f">Plant access code
+            <span class="hint">Ask your plant manager. Each device needs it once.</span>
+            <input type="text" id="sCode" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Access code">
+          </label>
+          <label class="f">Line or machine
+            <input type="text" id="sLine" placeholder="e.g. Flexo Folder Gluer 1">
+          </label>
+          <label class="f">Job / product
+            <input type="text" id="sJob" placeholder="e.g. RSC 12x10x8, 2-color, customer ABC">
+          </label>
+          <div>
+            <div style="font-weight:600;margin-bottom:6px">What to check</div>
+            <div class="checks" id="sChecks"></div>
+          </div>
+          <label class="f">Job-specific notes for the inspector
+            <span class="hint">Anything a new operator would need to know: logo color, text that must appear, which panel faces up.</span>
+            <textarea id="sNotes" placeholder="e.g. Logo is red on the long panels. 'FRAGILE' must print on both end panels."></textarea>
+          </label>
+          <div>
+            <div style="font-weight:600;margin-bottom:6px">Good sample (approved box)</div>
+            <div class="ref">
+              <div class="ph" id="refPh">No sample yet</div>
+              <div class="grid" style="display:grid;gap:8px">
+                <span class="small muted">A photo of an approved box, taken from this same camera position. The AI compares every product against it.</span>
+                <div class="row">
+                  <button class="btn sm primary" id="refFromCam">Use current camera view</button>
+                  <label class="btn sm" for="refInput" style="display:inline-grid;place-items:center">Upload photo</label>
+                  <input id="refInput" type="file" accept="image/*" class="sr">
+                  <button class="btn sm" id="refClear">Remove</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="panel form">
+            <h2>Triggering and alerts</h2>
+            <label class="f">Inspection speed
+              <select id="sTier">
+                <option value="quick">Fast (about 1–3 s per product)</option>
+                <option value="thorough">Thorough (about 5–15 s per product)</option>
+              </select>
+            </label>
+            <label class="f">Inspect every
+              <span class="hint">1 = every product. On fast lines use a higher number so the AI can keep up.</span>
+              <select id="sEveryN">
+                <option value="1">Every product</option><option value="2">Every 2nd product</option>
+                <option value="5">Every 5th product</option><option value="10">Every 10th product</option>
+                <option value="25">Every 25th product</option><option value="50">Every 50th product</option>
+              </select>
+            </label>
+            <label class="f">Trigger sensitivity <span class="hint" id="sensVal"></span>
+              <input type="range" id="sSens" min="1" max="10" step="1">
+            </label>
+            <label class="f">Photo delay after product enters <span class="hint" id="settleVal"></span>
+              <input type="range" id="sSettle" min="0" max="1500" step="50">
+            </label>
+            <label class="toggle"><input type="checkbox" id="sSound"> Alarm sound on failures</label>
+            <label class="toggle"><input type="checkbox" id="sVib"> Vibrate on failures</label>
+            <label class="toggle"><input type="checkbox" id="sCheckAlarm"> Also alarm on "Check" results</label>
+          </div>
+          <div class="panel">
+            <h2>Mounting checklist</h2>
+            <ol class="steps small">
+              <li>Mount the device 2–4 ft above the belt, lens pointing straight down, and plug it in.</li>
+              <li>Add steady lighting over the belt. Avoid glare from shop lights on glossy print.</li>
+              <li>Start the camera and draw the yellow trigger zone across the belt where each product fully shows.</li>
+              <li>With the belt empty, tap Learn empty belt.</li>
+              <li>Take the good-sample photo from this same position.</li>
+              <li>Run 10–20 products and check that each one triggers exactly once. Adjust sensitivity and photo delay if needed.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- LOG -->
+    <section class="view" id="v-log" aria-label="Log">
+      <div class="panel">
+        <div class="row" style="justify-content:space-between">
+          <h2 style="margin:0">Inspection log</h2>
+          <div class="row">
+            <select id="logFilter" class="btn sm" style="min-height:36px;width:auto">
+              <option value="all">All results</option><option value="FAIL">Fail</option><option value="CHECK">Check</option><option value="PASS">Pass</option>
+            </select>
+            <button class="btn sm" id="btnExport">Export CSV</button>
+            <button class="btn sm" id="btnClear">Clear log</button>
+          </div>
+        </div>
+        <p class="small muted" style="margin:6px 0 12px">Kept on this device (last 150 inspections). Record failures on the QF120 waste/comments log as usual.</p>
+        <div class="list" id="logList"></div>
+      </div>
+    </section>
+
+    <!-- SUPERVISOR -->
+    <section class="view" id="v-alerts" aria-label="Alerts">
+      <div class="panel">
+        <h2>Alerts from all lines</h2>
+        <p class="small muted" style="margin:0 0 10px">Every Fail and Check from any camera station shows here. Supervisors can open this page on their own phone and leave this tab open.</p>
+        <label class="toggle"><input type="checkbox" id="supAlarm"> Sound the alarm on this phone for new failures</label>
+        <div class="notice" id="supOff" hidden>Can't reach the shared alert feed. Check the access code in Setup and the internet connection.</div>
+      </div>
+      <div class="list" id="supList" style="margin-top:14px"></div>
+    </section>
+  </main>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-v="inspect"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Inspect</button>
+    <button role="tab" aria-selected="false" data-v="setup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Setup</button>
+    <button role="tab" aria-selected="false" data-v="log"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h7M9 7h3"/></svg>Log</button>
+    <button role="tab" aria-selected="false" data-v="alerts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>Alerts<span class="badge" id="alertBadge">0</span></button>
+  </nav>
+</div>
+
+<div class="alarm" id="alarm" role="alertdialog" aria-live="assertive" aria-labelledby="alarmTitle">
+  <h2 id="alarmTitle" class="cond">FAIL</h2>
+  <div class="where" id="alarmWhere"></div>
+  <img id="alarmImg" alt="Failed product">
+  <ul id="alarmList"></ul>
+  <div id="alarmMore" style="font-weight:600"></div>
+  <button class="ack" id="alarmAck">Acknowledge</button>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(() => {
+"use strict";
+const $ = s => document.querySelector(s);
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch{ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} }
+};
+function el(tag, attrs = {}, ...kids){
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") n.className = v; else if (k === "text") n.textContent = v;
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), v); else n.setAttribute(k, v);
+  }
+  for (const k of kids) if (k != null) n.append(k);
+  return n;
+}
+const fmtTime = ts => new Date(ts).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit", second:"2-digit"});
+const fmtDate = ts => new Date(ts).toLocaleString([], {month:"short", day:"numeric", hour:"2-digit", minute:"2-digit"});
+
+/* ---------- Settings ---------- */
+const CHECKS = [
+  {id:"print",  label:"Print quality & registration", hint:"Smears, voids, missing print, off-register colors"},
+  {id:"ink",    label:"Ink color",                    hint:"Color matches the good sample"},
+  {id:"score",  label:"Slotting & scoring",           hint:"Slots clean and in position, scores not cracked"},
+  {id:"die",    label:"Die cutting",                  hint:"Clean cuts, no hanging trim or ragged edges"},
+  {id:"joint",  label:"Glue joint",                   hint:"Joint glued, even gap, no fishtail"},
+  {id:"damage", label:"Board damage",                 hint:"Crushed flute, tears, warp, water damage"},
+  {id:"bundle", label:"Bundle & strapping",           hint:"Straps present, bundle square and even"},
+  {id:"tag",    label:"Load tag",                     hint:"Tag present and readable"}
+];
+const DEFAULTS = {line:"", job:"", checks:["print","ink","score","die","joint","damage"], notes:"",
+  tier:"fast", everyN:1, sens:6, settle:250, sound:true, vibrate:true, checkAlarm:false,
+  zone:{x:.25, y:.08, w:.5, h:.84}};
+const S = Object.assign({}, DEFAULTS, store.get("qc.settings", {}));
+const save = () => store.set("qc.settings", S);
+let refDataUrl = store.get("qc.ref", null);
+const deviceId = store.get("qc.device", null) || (() => { const id = Math.random().toString(36).slice(2, 10); store.set("qc.device", id); return id; })();
+
+/* ---------- Site API ---------- */
+let accessCode = store.get("qc.code", "");
+let aiOk = false;
+const aiPill = $("#aiPill");
+function setAi(state, text){ aiPill.className = "ai-pill " + state; aiPill.textContent = text; }
+async function api(path, opts = {}){
+  const res = await fetch(path, {...opts, headers:{"content-type":"application/json", "x-access-code":accessCode, ...(opts.headers || {})}});
+  let body = null; try { body = await res.json(); } catch {}
+  if (!res.ok) throw Object.assign(new Error((body && body.message) || ("HTTP " + res.status)), {status:res.status, code:body && body.error});
+  return body;
+}
+async function checkAi(){
+  if (!accessCode) { aiOk = false; setAi("bad", "Enter access code"); return; }
+  try {
+    const r = await api("/api/inspect");
+    aiOk = !!r.apiKey; setAi(aiOk ? "ok" : "bad", aiOk ? "AI ready" : "API key missing");
+  } catch (e) {
+    aiOk = false; setAi("bad", e.status === 401 ? "Wrong access code" : e.code === "setup" ? "Site not set up" : "Offline");
+  }
+}
+aiPill.addEventListener("click", () => {
+  const c = prompt("Plant access code", accessCode); if (c == null) return;
+  accessCode = c.trim(); store.set("qc.code", accessCode); $("#sCode").value = accessCode; checkAi(); pollEvents();
+});
+function showSupOff(on){ $("#supOff").hidden = !on; }
+/* ---------- Tabs ---------- */
+document.querySelectorAll("nav.tabs button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll("nav.tabs button").forEach(x => x.setAttribute("aria-selected", x === b));
+  document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.id === "v-" + b.dataset.v));
+  if (b.dataset.v === "alerts") { unseenAlerts = 0; updateBadge(); }
+  window.scrollTo(0, 0);
+}));
+
+/* ---------- Setup form ---------- */
+function bindSetup(){
+  const box = $("#sChecks");
+  CHECKS.forEach(c => {
+    const cb = el("input", {type:"checkbox", value:c.id});
+    cb.checked = S.checks.includes(c.id);
+    cb.addEventListener("change", () => { S.checks = [...box.querySelectorAll("input:checked")].map(i => i.value); save(); });
+    box.append(el("label", {}, cb, el("span", {}, c.label, el("small", {text:c.hint}))));
+  });
+  const txt = (id, key, after) => { const i = $(id); i.value = S[key]; i.addEventListener("input", () => { S[key] = i.value; save(); after && after(); }); };
+  txt("#sLine", "line", updateHeader); txt("#sJob", "job", updateHeader); txt("#sNotes", "notes");
+  const sel = (id, key, num) => { const i = $(id); i.value = String(S[key]); i.addEventListener("change", () => { S[key] = num ? Number(i.value) : i.value; save(); }); };
+  sel("#sTier", "tier"); sel("#sEveryN", "everyN", true);
+  const rng = (id, key, out, fmt) => { const i = $(id); i.value = S[key]; const upd = () => { $(out).textContent = fmt(S[key]); };
+    i.addEventListener("input", () => { S[key] = Number(i.value); save(); upd(); }); upd(); };
+  rng("#sSens", "sens", "#sensVal", v => "— " + (v <= 3 ? "low (big products, busy background)" : v >= 8 ? "high (small or light-colored products)" : "medium") + ", " + v + "/10");
+  rng("#sSettle", "settle", "#settleVal", v => "— " + v + " ms");
+  const tog = (id, key) => { const i = $(id); i.checked = !!S[key]; i.addEventListener("change", () => { S[key] = i.checked; save(); }); };
+  const code = $("#sCode"); code.value = accessCode;
+  code.addEventListener("change", () => { accessCode = code.value.trim(); store.set("qc.code", accessCode); checkAi(); pollEvents(); });
+  tog("#sSound", "sound"); tog("#sVib", "vibrate"); tog("#sCheckAlarm", "checkAlarm");
+  renderRef(); updateHeader();
+}
+function updateHeader(){ $("#hdrSub").textContent = [S.line || "No line set", S.job].filter(Boolean).join(" — "); }
+function renderRef(){
+  const ph = $("#refPh"); ph.textContent = "";
+  if (refDataUrl) ph.append(el("img", {src:refDataUrl, alt:"Good sample"})); else ph.textContent = "No sample yet";
+  $("#refClear").disabled = !refDataUrl;
+}
+$("#refFromCam").addEventListener("click", () => {
+  if (!camOn) { toast("Start the camera on the Inspect tab first."); return; }
+  refDataUrl = grab(900, .8).toDataURL("image/jpeg", .8); store.set("qc.ref", refDataUrl); renderRef(); toast("Good sample saved.");
+});
+$("#refInput").addEventListener("change", async e => {
+  const f = e.target.files[0]; if (!f) return;
+  const c = await fileToCanvas(f, 900); refDataUrl = c.toDataURL("image/jpeg", .8); store.set("qc.ref", refDataUrl); renderRef(); e.target.value = "";
+});
+$("#refClear").addEventListener("click", () => { refDataUrl = null; store.set("qc.ref", null); renderRef(); });
+
+/* ---------- Camera ---------- */
+const video = $("#video"), overlay = $("#overlay"), octx = overlay.getContext("2d"), stage = $("#stage");
+let stream = null, camOn = false, facing = "environment", wakeLock = null, loopTimer = null;
+async function startCamera(){
+  ensureAudio();
+  $("#camErr").hidden = true;
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw Object.assign(new Error("no api"), {name:"NotSupportedError"});
+    stream = await navigator.mediaDevices.getUserMedia({audio:false, video:{facingMode:{ideal:facing}, width:{ideal:1280}, height:{ideal:720}}});
+    video.srcObject = stream; await video.play();
+    camOn = true; $("#stageEmpty").hidden = true; $("#meter").hidden = false; $("#photoFallback").hidden = true;
+    const r = (video.videoWidth || 16) / (video.videoHeight || 9);
+    stage.style.aspectRatio = String(r);
+    stage.style.setProperty("--stage-max", `min(100%, calc(62dvh * ${r.toFixed(4)}))`);
+    ["#btnArm","#btnBg","#btnZone","#btnNow","#btnFlip"].forEach(s => $(s).disabled = false);
+    $("#btnCam").textContent = "Stop camera"; $("#btnCam").className = "btn";
+    bg = null; $("#bgTip").hidden = false;
+    requestWake(); resizeOverlay();
+    clearInterval(loopTimer); loopTimer = setInterval(tick, 100);
+  } catch (e) {
+    const msg = e && e.name === "NotAllowedError" ? "Camera permission was blocked. Allow camera access for this page, then try again."
+      : e && e.name === "NotFoundError" ? "No camera was found on this device."
+      : "The live camera couldn't start in this view.";
+    const n = $("#camErr"); n.textContent = msg; n.hidden = false; $("#photoFallback").hidden = false;
+  }
+}
+function stopCamera(){
+  setArmed(false); clearInterval(loopTimer);
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  stream = null; camOn = false; video.srcObject = null;
+  $("#stageEmpty").hidden = false; $("#meter").hidden = true; $("#bgTip").hidden = true;
+  ["#btnArm","#btnBg","#btnZone","#btnNow","#btnFlip"].forEach(s => $(s).disabled = true);
+  $("#btnCam").textContent = "Start camera"; $("#btnCam").className = "btn primary";
+  setChip("Idle", ""); releaseWake(); drawOverlay();
+}
+$("#btnCam").addEventListener("click", () => camOn ? stopCamera() : startCamera());
+$("#btnFlip").addEventListener("click", async () => { facing = facing === "environment" ? "user" : "environment"; const armed = isArmed; stopCamera(); await startCamera(); if (armed) setArmed(true); });
+async function requestWake(){ try{ if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen"); }catch{} }
+function releaseWake(){ try{ wakeLock && wakeLock.release(); }catch{} wakeLock = null; }
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && camOn) requestWake(); });
+
+function grab(maxW, q){
+  const w = video.videoWidth, h = video.videoHeight, s = Math.min(1, maxW / w);
+  const c = document.createElement("canvas"); c.width = Math.round(w * s); c.height = Math.round(h * s);
+  c.getContext("2d").drawImage(video, 0, 0, c.width, c.height); return c;
+}
+function fileToCanvas(file, maxW){
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => { const s = Math.min(1, maxW / img.width); const c = document.createElement("canvas");
+      c.width = Math.round(img.width * s); c.height = Math.round(img.height * s); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url); res(c); };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("bad image")); };
+    img.src = url;
+  });
+}
+const toBlob = (c, q = .85) => new Promise(r => c.toBlob(r, "image/jpeg", q));
+function thumbOf(c){ const t = document.createElement("canvas"); const s = 200 / c.width; t.width = 200; t.height = Math.round(c.height * s);
+  t.getContext("2d").drawImage(c, 0, 0, t.width, t.height); return t.toDataURL("image/jpeg", .6); }
+async function dataUrlToBlob(u){ return (await fetch(u)).blob(); }
+
+/* ---------- Trigger zone ---------- */
+let zoning = false, dragStart = null;
+function resizeOverlay(){ const r = overlay.getBoundingClientRect(); overlay.width = Math.max(1, Math.round(r.width * devicePixelRatio)); overlay.height = Math.max(1, Math.round(r.height * devicePixelRatio)); drawOverlay(); }
+new ResizeObserver(resizeOverlay).observe(stage);
+let zoneFlash = 0;
+function drawOverlay(){
+  const W = overlay.width, H = overlay.height; octx.clearRect(0, 0, W, H);
+  if (!camOn) return;
+  const z = S.zone, x = z.x * W, y = z.y * H, w = z.w * W, h = z.h * H;
+  octx.fillStyle = "rgba(0,0,0,.28)";
+  octx.fillRect(0, 0, W, y); octx.fillRect(0, y + h, W, H - y - h); octx.fillRect(0, y, x, h); octx.fillRect(x + w, y, W - x - w, h);
+  octx.lineWidth = 3 * devicePixelRatio;
+  octx.strokeStyle = zoneFlash > 0 ? "#3DBE72" : "#F2C200";
+  octx.setLineDash(zoning ? [10 * devicePixelRatio, 6 * devicePixelRatio] : []);
+  octx.strokeRect(x, y, w, h);
+}
+function normPt(e){ const r = overlay.getBoundingClientRect(); return {x:Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y:Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))}; }
+overlay.addEventListener("pointerdown", e => { if (!zoning) return; overlay.setPointerCapture(e.pointerId); dragStart = normPt(e); });
+overlay.addEventListener("pointermove", e => { if (!zoning || !dragStart) return; const p = normPt(e);
+  S.zone = {x:Math.min(p.x, dragStart.x), y:Math.min(p.y, dragStart.y), w:Math.abs(p.x - dragStart.x), h:Math.abs(p.y - dragStart.y)}; drawOverlay(); });
+overlay.addEventListener("pointerup", () => { if (!zoning || !dragStart) return; dragStart = null;
+  if (S.zone.w < .05 || S.zone.h < .05) S.zone = {...DEFAULTS.zone};
+  save(); bg = null; prevGray = null; setZoning(false); toast("Zone saved. Tap Learn empty belt with the belt clear."); $("#bgTip").hidden = false; });
+function setZoning(on){ zoning = on; stage.classList.toggle("zoning", on); $("#chipZone").hidden = !on; $("#btnZone").classList.toggle("on", on); drawOverlay(); }
+$("#btnZone").addEventListener("click", () => setZoning(!zoning));
+
+/* ---------- Product detection ---------- */
+const SW = 160; const sc = document.createElement("canvas"); const sctx = sc.getContext("2d", {willReadFrequently:true});
+let bg = null, prevGray = null, state = "EMPTY", presentN = 0, clearN = 0, settleTimer = null;
+let isArmed = false, busy = false;
+const counts = {seen:0, insp:0, pass:0, check:0, fail:0, unclear:0, notInspected:0};
+function zoneGray(){
+  const vw = video.videoWidth, vh = video.videoHeight; if (!vw) return null;
+  const SH = Math.round(SW * vh / vw); if (sc.width !== SW || sc.height !== SH) { sc.width = SW; sc.height = SH; }
+  sctx.drawImage(video, 0, 0, SW, SH);
+  const zx = Math.floor(S.zone.x * SW), zy = Math.floor(S.zone.y * SH);
+  const zw = Math.max(4, Math.floor(S.zone.w * SW)), zh = Math.max(4, Math.floor(S.zone.h * SH));
+  const d = sctx.getImageData(zx, zy, zw, zh).data, g = new Float32Array(zw * zh);
+  for (let i = 0, j = 0; i < d.length; i += 4, j++) g[j] = d[i] * .299 + d[i + 1] * .587 + d[i + 2] * .114;
+  return g;
+}
+const meanDiff = (a, b) => { if (!a || !b || a.length !== b.length) return 0; let s = 0; for (let i = 0; i < a.length; i++) s += Math.abs(a[i] - b[i]); return s / a.length; };
+const threshold = () => 40 - S.sens * 3.1;
+$("#btnBg").addEventListener("click", () => { const g = zoneGray(); if (!g) return; bg = g; state = "EMPTY"; presentN = clearN = 0; $("#bgTip").hidden = true; toast("Empty belt learned."); });
+
+function tick(){
+  if (zoneFlash > 0) { zoneFlash--; if (!zoneFlash) drawOverlay(); }
+  const g = zoneGray(); if (!g) return;
+  const thr = threshold();
+  const level = bg ? meanDiff(g, bg) : meanDiff(g, prevGray);
+  prevGray = g;
+  $("#meterFill").style.width = Math.min(100, level / (thr * 2) * 100) + "%";
+  if (!isArmed) return;
+  const present = level > thr, gone = level < thr * .6;
+  if (state === "EMPTY") {
+    if (bg && level < thr * .5) for (let i = 0; i < bg.length; i++) bg[i] = bg[i] * .97 + g[i] * .03; // follow slow lighting changes
+    presentN = present ? presentN + 1 : 0;
+    if (presentN >= 2) { state = "SETTLING"; setChip("Product in view", "live"); settleTimer = setTimeout(onProduct, S.settle); }
+  } else if (state === "WAIT_CLEAR") {
+    clearN = gone ? clearN + 1 : 0;
+    // no empty-belt reference: motion stops when product stops, so also re-arm after a quiet spell
+    if (clearN >= 3) { state = "EMPTY"; presentN = 0; if (!busy) setChip("Waiting for product", ""); }
+  }
+}
+function onProduct(){
+  if (!isArmed) return;
+  state = "WAIT_CLEAR"; clearN = 0; counts.seen++; zoneFlash = 4; drawOverlay();
+  if (counts.seen % S.everyN !== 0) { renderCounts(); return; }
+  if (busy) { counts.notInspected++; renderCounts(); return; }
+  const c = grab(1280); runInspection(c, "auto");
+}
+function setArmed(on){
+  isArmed = on; clearTimeout(settleTimer); state = "EMPTY"; presentN = clearN = 0;
+  const b = $("#btnArm"); b.textContent = on ? "Pause inspecting" : "Start inspecting"; b.className = "btn grow " + (on ? "stop" : "go");
+  setChip(on ? "Waiting for product" : (camOn ? "Paused" : "Idle"), on ? "" : "warn");
+}
+$("#btnArm").addEventListener("click", () => {
+  if (!isArmed && !aiOk) toast("AI isn't ready (" + aiPill.textContent + "). Products will be counted but not inspected.");
+  setArmed(!isArmed);
+});
+$("#btnNow").addEventListener("click", () => { if (!camOn) return; if (busy) { toast("Still inspecting the last product."); return; } runInspection(grab(1280), "manual"); });
+$("#snapInput").addEventListener("change", async e => { const f = e.target.files[0]; if (!f) return; ensureAudio();
+  const c = await fileToCanvas(f, 1280); e.target.value = ""; if (busy) { toast("Still inspecting the last product."); return; } runInspection(c, "photo"); });
+function setChip(t, cls){ const c = $("#chipState"); c.textContent = t; c.className = "chip " + (cls || ""); }
+
+/* ---------- AI inspection (prompt is built on the server) ---------- */
+async function runInspection(canvas, source){
+  busy = true; setChip("Inspecting…", "busy");
+  const entry = {id:Date.now().toString(36) + Math.random().toString(36).slice(2, 5), ts:Date.now(), line:S.line, job:S.job, source,
+    thumb:thumbOf(canvas), verdict:"PENDING", summary:"Inspecting…", defects:[], confidence:null};
+  renderLast(entry);
+  try {
+    if (!aiOk) { entry.verdict = "ERROR"; entry.summary = "AI isn't ready: " + aiPill.textContent + "."; return; }
+    const b64 = c => c.toDataURL("image/jpeg", .85).split(",")[1];
+    const payload = {image:b64(canvas), reference: refDataUrl ? refDataUrl.split(",")[1] : "", tier:S.tier === "thorough" ? "thorough" : "fast",
+      settings:{line:S.line, job:S.job, checks:S.checks, notes:S.notes}};
+    const {result:r} = await api("/api/inspect", {method:"POST", body:JSON.stringify(payload)});
+    const v = String(r && r.verdict || "").toUpperCase();
+    entry.verdict = ["PASS","CHECK","FAIL","UNCLEAR"].includes(v) ? v : "CHECK";
+    entry.summary = String(r && r.summary || "").slice(0, 300) || (entry.verdict === "PASS" ? "No issues seen." : "See details.");
+    entry.defects = Array.isArray(r && r.defects) ? r.defects.slice(0, 8).map(d => ({check:String(d.check || ""), issue:String(d.issue || ""), severity:d.severity === "major" ? "major" : "minor"})) : [];
+    entry.confidence = Number.isFinite(Number(r && r.confidence)) ? Math.round(Number(r.confidence)) : null;
+  } catch (e) {
+    entry.verdict = "ERROR";
+    if (e.status === 401) { entry.summary = "Wrong access code. Fix it in Setup."; setArmed(false); checkAi(); }
+    else if (e.code === "setup" || e.code === "bad_key") { entry.summary = "The site's AI key isn't set up correctly. Tell the plant manager."; setArmed(false); checkAi(); }
+    else if (e.code === "rate_limited") { entry.summary = "AI is busy or the usage limit was reached. Inspect fewer products (Setup → Inspect every)."; }
+    else if (e.status === 502 || e.status === 504) entry.summary = S.tier === "thorough" ? "Inspection took too long. Try Fast mode." : "AI service error. It will try again on the next product.";
+    else entry.summary = "Couldn't reach the site. Check Wi-Fi.";
+  } finally {
+    busy = false;
+    finishEntry(entry);
+    if (isArmed) setChip(state === "EMPTY" ? "Waiting for product" : "Product leaving", "");
+    else if (camOn) setChip("Paused", "warn");
+  }
+}
+function finishEntry(entry){
+  if (entry.verdict !== "ERROR") counts.insp++;
+  if (entry.verdict === "PASS") counts.pass++;
+  if (entry.verdict === "CHECK") counts.check++;
+  if (entry.verdict === "FAIL") counts.fail++;
+  if (entry.verdict === "UNCLEAR") counts.unclear++;
+  renderCounts(); renderLast(entry);
+  log.unshift(entry); if (log.length > 150) log.length = 150; store.set("qc.log", log); renderLog();
+  if (entry.verdict === "FAIL" || (entry.verdict === "CHECK" && S.checkAlarm)) { showAlarm(entry); pushEvent(entry); }
+  else if (entry.verdict === "CHECK") { chirp(); toast("Check: " + entry.summary); pushEvent(entry); }
+  else if (entry.verdict === "ERROR") toast(entry.summary);
+}
+function renderCounts(){
+  $("#cInsp").textContent = counts.insp; $("#cPass").textContent = counts.pass; $("#cCheck").textContent = counts.check; $("#cFail").textContent = counts.fail;
+  $("#countNote").textContent = `Products seen: ${counts.seen} · Not inspected (AI busy): ${counts.notInspected} · Unclear photos: ${counts.unclear}`;
+}
+function defectList(defects){
+  const ul = el("ul", {class:"defects"});
+  defects.forEach(d => ul.append(el("li", {}, (d.check ? d.check + ": " : "") + d.issue, el("span", {class:"sev " + d.severity, text:d.severity}))));
+  return ul;
+}
+function renderLast(e){
+  const box = $("#lastResult"); box.className = ""; box.textContent = "";
+  const right = el("div", {}, el("div", {class:"verdict v-" + e.verdict, text:e.verdict === "PENDING" ? "Inspecting…" : e.verdict}),
+    el("div", {class:"small muted", text:fmtTime(e.ts) + (e.confidence != null ? " · confidence " + e.confidence + "%" : "") + (e.source !== "auto" ? " · " + e.source : "")}),
+    el("div", {style:"margin-top:4px", text:e.summary}));
+  if (e.defects.length) right.append(defectList(e.defects));
+  box.append(el("div", {class:"result"}, el("img", {src:e.thumb, alt:"Inspected product"}), right));
+}
+
+/* ---------- Log ---------- */
+let log = store.get("qc.log", []);
+function renderLog(){
+  const f = $("#logFilter").value, list = $("#logList"); list.textContent = "";
+  const rows = log.filter(e => f === "all" || e.verdict === f);
+  if (!rows.length) { list.append(el("div", {class:"empty", text:"No inspections to show."})); return; }
+  rows.forEach(e => list.append(el("div", {class:"item"}, el("img", {src:e.thumb, alt:"", loading:"lazy"}),
+    el("div", {}, el("div", {class:"sum", text:e.summary}), el("div", {class:"meta", text:fmtDate(e.ts) + (e.line ? " · " + e.line : "")})),
+    el("div", {class:"v v-" + e.verdict, text:e.verdict}))));
+}
+$("#logFilter").addEventListener("change", renderLog);
+$("#btnClear").addEventListener("click", () => { if (!confirm("Clear the inspection log on this device?")) return; log = []; store.set("qc.log", log); renderLog(); });
+$("#btnExport").addEventListener("click", async () => {
+  const q = v => '"' + String(v ?? "").replace(/"/g, '""') + '"';
+  const lines = [["Date","Time","Line","Job","Result","Summary","Defects","Confidence","Trigger"].join(",")];
+  log.slice().reverse().forEach(e => { const d = new Date(e.ts);
+    lines.push([d.toLocaleDateString(), d.toLocaleTimeString(), e.line, e.job, e.verdict, e.summary,
+      e.defects.map(x => `${x.check}: ${x.issue} (${x.severity})`).join("; "), e.confidence ?? "", e.source].map(q).join(",")); });
+  const url = URL.createObjectURL(new Blob([lines.join("\n")], {type:"text/csv"}));
+  const a = el("a", {href:url, download:`qc-log-${new Date().toISOString().slice(0,10)}.csv`}); document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+});
+
+/* ---------- Shared alerts (supervisor) ---------- */
+let unseenAlerts = 0; const feedStart = Date.now();
+const supAlarm = $("#supAlarm"); supAlarm.checked = store.get("qc.supAlarm", false);
+supAlarm.addEventListener("change", () => { store.set("qc.supAlarm", supAlarm.checked); if (supAlarm.checked) ensureAudio(); });
+function updateBadge(){ const b = $("#alertBadge"); b.textContent = unseenAlerts; b.classList.toggle("show", unseenAlerts > 0); }
+async function pushEvent(entry){
+  if (!accessCode) return;
+  try {
+    const r = await api("/api/events", {method:"POST", body:JSON.stringify({ts:entry.ts, line:entry.line || "", job:entry.job || "", verdict:entry.verdict,
+      summary:entry.summary, defects:entry.defects.map(d => `${d.check}: ${d.issue} (${d.severity})`).join("; "), thumb:entry.thumb, device:deviceId})});
+    entry.eventId = r.id;
+  } catch {}
+}
+const seenEvents = new Set(); let firstPoll = true, pollBusy = false;
+async function pollEvents(){
+  if (!accessCode || pollBusy) return;
+  pollBusy = true;
+  try {
+    const {events} = await api("/api/events");
+    showSupOff(false);
+    const onAlerts = $("#v-alerts").classList.contains("on");
+    events.slice().reverse().forEach(d => {
+      if (seenEvents.has(d.id)) return; seenEvents.add(d.id);
+      if (firstPoll || d.device === deviceId || d.ts < feedStart) return;
+      if (!onAlerts) { unseenAlerts++; updateBadge(); }
+      if (d.verdict === "FAIL" && supAlarm.checked && !d.ack) showAlarm({verdict:"FAIL", line:d.line, job:d.job, ts:d.ts, thumb:d.thumb, summary:d.summary, eventId:d.id,
+        defects:d.defects ? d.defects.split("; ").map(s => ({check:"", issue:s, severity:""})) : []}, true);
+    });
+    firstPoll = false;
+    renderSup(events);
+  } catch { showSupOff(true); }
+  finally { pollBusy = false; }
+}
+setInterval(() => { if (document.visibilityState === "visible") pollEvents(); }, 5000);
+async function ackEvent(id){ if (!id) return; try { await api("/api/events", {method:"PATCH", body:JSON.stringify({id})}); } catch {} pollEvents(); }
+function renderSup(events){
+  const list = $("#supList"); list.textContent = "";
+  if (!events.length) { list.append(el("div", {class:"empty", text:"No failures or checks reported yet."})); return; }
+  events.forEach(d => {
+    const ackBtn = d.ack ? el("span", {class:"small muted", text:"Acknowledged"}) :
+      el("button", {class:"btn sm", text:"Acknowledge", onclick:() => ackEvent(d.id)});
+    list.append(el("div", {class:"item" + (d.ack ? " acked" : "")}, el("img", {src:d.thumb || "", alt:"", loading:"lazy"}),
+      el("div", {}, el("div", {class:"v v-" + d.verdict, text:d.verdict + (d.line ? " — " + d.line : "")}), el("div", {class:"sum", text:d.summary}),
+        el("div", {class:"meta", text:fmtDate(d.ts) + (d.job ? " · " + d.job : "")})), ackBtn));
+  });
+}
+
+/* ---------- Alarm, sound, toast ---------- */
+let actx = null, alarmTimer = null, currentAlarm = null, extraFails = 0;
+function ensureAudio(){ try { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === "suspended") actx.resume(); } catch {} }
+function tone(freq, start, dur, vol = .5){
+  if (!actx) return; const o = actx.createOscillator(), g = actx.createGain(); o.type = "square"; o.frequency.value = freq;
+  g.gain.setValueAtTime(0, actx.currentTime + start); g.gain.linearRampToValueAtTime(vol, actx.currentTime + start + .01);
+  g.gain.setValueAtTime(vol, actx.currentTime + start + dur - .02); g.gain.linearRampToValueAtTime(0, actx.currentTime + start + dur);
+  o.connect(g).connect(actx.destination); o.start(actx.currentTime + start); o.stop(actx.currentTime + start + dur + .02);
+}
+function siren(){ tone(880, 0, .22); tone(660, .25, .22); tone(880, .5, .22); }
+function chirp(){ if (S.sound) { tone(740, 0, .12, .3); tone(740, .18, .12, .3); } }
+function showAlarm(entry, remote){
+  const a = $("#alarm");
+  if (a.classList.contains("show")) { extraFails++; $("#alarmMore").textContent = `+${extraFails} more since this alarm`; return; }
+  currentAlarm = entry; extraFails = 0; $("#alarmMore").textContent = "";
+  a.style.background = entry.verdict === "CHECK" ? "var(--check)" : "";
+  $("#alarmTitle").textContent = entry.verdict;
+  $("#alarmWhere").textContent = [entry.line || "Line not set", entry.job, fmtTime(entry.ts)].filter(Boolean).join(" · ");
+  $("#alarmImg").src = entry.thumb;
+  const ul = $("#alarmList"); ul.textContent = "";
+  ul.append(el("li", {text:entry.summary}));
+  entry.defects.slice(0, 4).forEach(d => ul.append(el("li", {style:"font-size:16px;opacity:.9", text:"• " + (d.check ? d.check + ": " : "") + d.issue})));
+  a.classList.add("show"); if (entry.verdict === "FAIL") a.classList.add("pulse");
+  if (S.vibrate && navigator.vibrate) navigator.vibrate([400, 150, 400, 150, 400]);
+  if (S.sound || remote) { siren(); clearInterval(alarmTimer); alarmTimer = setInterval(siren, 1400); }
+  $("#alarmAck").focus();
+}
+$("#alarmAck").addEventListener("click", async () => {
+  $("#alarm").classList.remove("show", "pulse"); clearInterval(alarmTimer);
+  if (navigator.vibrate) navigator.vibrate(0);
+  const id = currentAlarm && currentAlarm.eventId; currentAlarm = null;
+  if (id) ackEvent(id);
+});
+let toastTimer = null;
+function toast(msg){ const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 5000); }
+
+/* ---------- Boot ---------- */
+bindSetup(); renderCounts(); renderLog(); setChip("Idle", "");
+checkAi(); pollEvents();
+if (!accessCode) setTimeout(() => toast("Tap the AI status at the top right to enter the plant access code."), 600);
+if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) $("#photoFallback").hidden = false;
+})();
+</script>
+</body>
+</html>
