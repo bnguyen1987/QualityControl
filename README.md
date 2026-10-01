@@ -1,6 +1,6 @@
 # Line QC Camera — Netlify site
 
-Site: https://gwpg-line-qc.netlify.app (Netlify project "gwpg-line-qc")
+Site: https://gwpg-line-qc.netlify.app (Netlify project "gwpg-line-qc", GitHub repo bnguyen1987/QualityControl)
 
 ## Already done
 - Netlify project created.
