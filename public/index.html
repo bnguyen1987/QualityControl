@@ -428,7 +428,8 @@ async function checkAi(){
   try {
     const r = await api("/api/inspect");
     aiOk = !!r.apiKey; aiNoKey = !r.apiKey;
-    setAi(aiOk ? "ok" : "warn", aiOk ? "AI ready" : "Test mode — no AI key");
+    if (aiOk && r.keyLooksRight === false) setAi("bad", "AI key looks wrong");
+    else setAi(aiOk ? "ok" : "warn", aiOk ? "AI ready" : "Test mode — no AI key");
   } catch (e) {
     aiOk = false; setAi("bad", e.status === 401 ? "Wrong access code" : e.code === "setup" ? "Site not set up" : "Offline");
   }
@@ -653,7 +654,9 @@ async function runInspection(canvas, source){
   } catch (e) {
     entry.verdict = "ERROR";
     if (e.status === 401) { entry.summary = "Wrong access code. Fix it in Setup."; setArmed(false); checkAi(); }
-    else if (e.code === "setup" || e.code === "bad_key") { entry.summary = "The site's AI key isn't set up correctly. Tell the plant manager."; setArmed(false); checkAi(); }
+    else if (e.code === "bad_key") { entry.summary = "Anthropic rejected the site's AI key. The key in Netlify needs to be replaced. Tell the plant manager."; setArmed(false); setAi("bad", "AI key rejected"); }
+    else if (e.code === "no_credit") { entry.summary = "The Anthropic account is out of credit. Add credit at console.anthropic.com. Tell the plant manager."; setArmed(false); setAi("bad", "AI out of credit"); }
+    else if (e.code === "setup") { entry.summary = "The site isn't set up yet (missing setting in Netlify). Tell the plant manager."; setArmed(false); checkAi(); }
     else if (e.code === "rate_limited") { entry.summary = "AI is busy or the usage limit was reached. Inspect fewer products (Setup → Inspect every)."; }
     else if (e.status === 502 || e.status === 504) entry.summary = S.tier === "thorough" ? "Inspection took too long. Try Fast mode." : "AI service error. It will try again on the next product.";
     else entry.summary = "Couldn't reach the site. Check Wi-Fi.";

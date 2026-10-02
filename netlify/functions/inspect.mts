@@ -52,15 +52,18 @@ function parseJson(text: string) {
   return null;
 }
 
+// Tolerate a key pasted with spaces, line breaks or quote marks around it
+const getKey = () => (Netlify.env.get("ANTHROPIC_API_KEY") || "").trim().replace(/^["']|["']$/g, "").trim();
+
 export default async (req: Request, context: Context) => {
   const denied = checkAccess(req);
   if (denied) return denied;
 
   // GET = status check used by the page's "AI ready" indicator
-  if (req.method === "GET") return json({ ok: true, apiKey: !!Netlify.env.get("ANTHROPIC_API_KEY") });
+  if (req.method === "GET") { const k = getKey(); return json({ ok: true, apiKey: !!k, keyLooksRight: k.startsWith("sk-ant-") }); }
   if (req.method !== "POST") return json({ error: "method" }, 405);
 
-  const apiKey = Netlify.env.get("ANTHROPIC_API_KEY");
+  const apiKey = getKey();
   if (!apiKey) return json({ error: "setup", message: "ANTHROPIC_API_KEY is not set on the Netlify site." }, 500);
 
   let body: any;
@@ -94,9 +97,10 @@ export default async (req: Request, context: Context) => {
 
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
-    const code = res.status === 429 ? "rate_limited" : res.status === 401 ? "bad_key" : "upstream";
+    const low = /credit balance/i.test(detail);
+    const code = low ? "no_credit" : res.status === 429 ? "rate_limited" : res.status === 401 || res.status === 403 ? "bad_key" : "upstream";
     console.log("Anthropic error", res.status, detail.slice(0, 500));
-    return json({ error: code, message: `AI service returned ${res.status}.` }, code === "rate_limited" ? 429 : 502);
+    return json({ error: code, message: `AI service returned ${res.status}.`, detail: detail.slice(0, 300) }, code === "rate_limited" ? 429 : 502);
   }
 
   const data: any = await res.json();
