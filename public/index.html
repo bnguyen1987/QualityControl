@@ -419,7 +419,11 @@ function setAi(state, text){ aiPill.className = "ai-pill " + state; aiPill.textC
 async function api(path, opts = {}){
   const res = await fetch(path, {...opts, headers:{"content-type":"application/json", "x-access-code":accessCode, ...(opts.headers || {})}});
   let body = null; try { body = await res.json(); } catch {}
-  if (!res.ok) throw Object.assign(new Error((body && body.message) || ("HTTP " + res.status)), {status:res.status, code:body && body.error});
+  if (!res.ok) {
+    let detail = "";
+    try { const d = JSON.parse(body && body.detail || "{}"); detail = d.error && (d.error.type + ": " + d.error.message) || ""; } catch {}
+    throw Object.assign(new Error((body && body.message) || ("HTTP " + res.status)), {status:res.status, code:body && body.error, detail:detail.slice(0, 160)});
+  }
   return body;
 }
 async function checkAi(){
@@ -654,7 +658,7 @@ async function runInspection(canvas, source){
   } catch (e) {
     entry.verdict = "ERROR";
     if (e.status === 401) { entry.summary = "Wrong access code. Fix it in Setup."; setArmed(false); checkAi(); }
-    else if (e.code === "bad_key") { entry.summary = "Anthropic rejected the site's AI key. The key in Netlify needs to be replaced. Tell the plant manager."; setArmed(false); setAi("bad", "AI key rejected"); }
+    else if (e.code === "bad_key") { entry.summary = "Anthropic rejected the site's AI key" + (e.detail ? " (" + e.detail + ")" : "") + ". Tell the plant manager."; setArmed(false); setAi("bad", "AI key rejected"); }
     else if (e.code === "no_credit") { entry.summary = "The Anthropic account is out of credit. Add credit at console.anthropic.com. Tell the plant manager."; setArmed(false); setAi("bad", "AI out of credit"); }
     else if (e.code === "setup") { entry.summary = "The site isn't set up yet (missing setting in Netlify). Tell the plant manager."; setArmed(false); checkAi(); }
     else if (e.code === "rate_limited") { entry.summary = "AI is busy or the usage limit was reached. Inspect fewer products (Setup → Inspect every)."; }
