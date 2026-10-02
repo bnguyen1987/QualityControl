@@ -7,7 +7,11 @@ Site: https://gwpg-line-qc.netlify.app (Netlify project "gwpg-line-qc", GitHub r
 - QC_ACCESS_CODE set to `gwqc-4827` (change it anytime in Netlify:
   Project configuration > Environment variables).
 
-## Step 1 — Get an Anthropic API key (one time)
+## AI access
+By default the site uses Netlify AI Gateway (no API key needed; usage is billed to
+Netlify credits). To use your own Anthropic account instead, follow Step 1.
+
+## Step 1 (optional) — Use your own Anthropic API key
 1. Go to https://console.anthropic.com and sign in or create an account.
 2. Billing: add a payment method and some prepaid credit.
 3. API Keys > Create Key. Name it "Line QC". Copy it (starts with sk-ant-).

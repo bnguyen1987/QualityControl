@@ -55,12 +55,17 @@ function parseJson(text: string) {
 // Tolerate a key pasted with spaces, line breaks or quote marks around it
 const getKey = () => (Netlify.env.get("ANTHROPIC_API_KEY") || "").trim().replace(/^["']|["']$/g, "").trim();
 
+// Netlify AI Gateway injects ANTHROPIC_BASE_URL (+ a gateway key) automatically.
+// If you set your own ANTHROPIC_API_KEY instead, Netlify leaves both alone and we call Anthropic directly.
+const baseUrl = () => (Netlify.env.get("ANTHROPIC_BASE_URL") || "https://api.anthropic.com").replace(/\/+$/, "");
+const viaGateway = () => !!Netlify.env.get("ANTHROPIC_BASE_URL");
+
 export default async (req: Request, context: Context) => {
   const denied = checkAccess(req);
   if (denied) return denied;
 
   // GET = status check used by the page's "AI ready" indicator
-  if (req.method === "GET") { const k = getKey(); return json({ ok: true, apiKey: !!k, keyLooksRight: k.startsWith("sk-ant-") }); }
+  if (req.method === "GET") { const k = getKey(); return json({ ok: true, apiKey: !!k, gateway: viaGateway(), keyLooksRight: viaGateway() || k.startsWith("sk-ant-") }); }
   if (req.method !== "POST") return json({ error: "method" }, 405);
 
   const apiKey = getKey();
@@ -86,7 +91,7 @@ export default async (req: Request, context: Context) => {
 
   let res: Response;
   try {
-    res = await fetch("https://api.anthropic.com/v1/messages", {
+    res = await fetch(`${baseUrl()}/v1/messages`, {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
       body: JSON.stringify({ model, max_tokens: 700, messages: [{ role: "user", content }] }),
@@ -107,7 +112,7 @@ export default async (req: Request, context: Context) => {
   const text = (data.content || []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("\n");
   const result = parseJson(text);
   if (!result) return json({ error: "invalid_json", message: "AI reply couldn't be read." }, 502);
-  return json({ result, model });
+  return json({ result, model, gateway: viaGateway() });
 };
 
 export const config: Config = { path: "/api/inspect" };

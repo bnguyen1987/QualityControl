@@ -433,7 +433,7 @@ async function checkAi(){
     const r = await api("/api/inspect");
     aiOk = !!r.apiKey; aiNoKey = !r.apiKey;
     if (aiOk && r.keyLooksRight === false) setAi("bad", "AI key looks wrong");
-    else setAi(aiOk ? "ok" : "warn", aiOk ? "AI ready" : "Test mode — no AI key");
+    else setAi(aiOk ? "ok" : "warn", aiOk ? (r.gateway ? "AI ready (Netlify)" : "AI ready") : "Test mode — no AI key");
   } catch (e) {
     aiOk = false; setAi("bad", e.status === 401 ? "Wrong access code" : e.code === "setup" ? "Site not set up" : "Offline");
   }
