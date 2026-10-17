@@ -40,7 +40,7 @@ Rules:
 - If no product is in the image, it is badly blurred, or mostly out of frame, use verdict "UNCLEAR".
 - "FAIL" = a major defect that should not ship. "CHECK" = a possible or minor issue a person should look at. "PASS" = no issues seen.
 Reply with only this JSON, no other text:
-{"verdict":"PASS|CHECK|FAIL|UNCLEAR","summary":"one short sentence for the operator","defects":[{"check":"which check item","issue":"what is wrong and where on the box","severity":"minor|major"}],"confidence":0-100}`;
+{"verdict":"PASS|CHECK|FAIL|UNCLEAR","summary":"one short sentence for the operator, in English","summary_es":"the same sentence in Spanish (Mexican plant-floor Spanish)","defects":[{"check":"which check item","issue":"what is wrong and where on the box, in English","issue_es":"the same in Spanish","severity":"minor|major"}],"confidence":0-100}`;
 }
 
 function parseJson(text: string) {
@@ -94,7 +94,7 @@ export default async (req: Request, context: Context) => {
     res = await fetch(`${baseUrl()}/v1/messages`, {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model, max_tokens: 700, messages: [{ role: "user", content }] }),
+      body: JSON.stringify({ model, max_tokens: 900, messages: [{ role: "user", content }] }),
     });
   } catch {
     return json({ error: "upstream", message: "Couldn't reach the AI service." }, 502);

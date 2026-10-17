@@ -47,7 +47,7 @@ export default async (req: Request, context: Context) => {
     const thumb = typeof b.thumb === "string" && b.thumb.startsWith("data:image/jpeg") && b.thumb.length < 60_000 ? b.thumb : "";
     await s.setJSON(id, {
       ts, line: str(b.line, 80), job: str(b.job, 120), verdict: ["FAIL", "CHECK"].includes(b.verdict) ? b.verdict : "CHECK",
-      summary: str(b.summary, 300), defects: str(b.defects, 1500), thumb, device: str(b.device, 20), ack: false,
+      summary: str(b.summary, 300), summary_es: str(b.summary_es, 300), defects: str(b.defects, 1500), thumb, device: str(b.device, 20), ack: false,
     });
     // trim old alerts
     const { blobs } = await s.list({ prefix: "ev-" });

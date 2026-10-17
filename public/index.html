@@ -4,59 +4,74 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Line QC Camera</title>
-<meta name="theme-color" content="#9C6A34">
+<meta name="theme-color" content="#00694b">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Line QC">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icon-180.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#E9ECEB; --panel:#FFFFFF; --panel2:#F4F6F5; --ink:#1C2226; --muted:#5B666D; --line:#CBD2D6;
-  --kraft:#9C6A34; --kraft-soft:#F1E4D3; --zone:#F2C200;
-  --pass:#1F8A4C; --check:#B87C00; --fail:#C62828; --stage:#0E1113;
-  --tab-h:64px;
+  /* Colors match Production Hub / SafetyTrack (teal, hue 170) */
+  --bg:oklch(97.5% 0.005 170); --panel:oklch(99.5% 0.002 170); --panel2:oklch(96% 0.007 170); --line:oklch(88% 0.01 170);
+  --ink:oklch(18% 0.01 170); --muted:oklch(45% 0.01 170);
+  --kraft:oklch(45% 0.12 170); --kraft-soft:oklch(92% 0.03 170); --zone:#F2C200;
+  --pass:oklch(50% 0.12 150); --check:oklch(55% 0.13 70); --fail:oklch(55% 0.2 25); --stage:#0E1113;
+  --shadow:0 1px 2px oklch(0% 0 0 / .05),0 2px 8px oklch(0% 0 0 / .04);
+  --sans:"Inter","Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
+  color-scheme:light;
   box-sizing:border-box;
   padding-top:env(safe-area-inset-top,0px);
   padding-bottom:env(safe-area-inset-bottom,0px);
 }
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
-    --bg:#15191C; --panel:#1F2529; --panel2:#262D32; --ink:#E7ECEE; --muted:#9AA6AD; --line:#343E44;
-    --kraft:#D19B5E; --kraft-soft:#3A2D1F; --pass:#3DBE72; --check:#F0B429; --fail:#FF5A52; --stage:#000;
+    --bg:oklch(17% 0.01 170); --panel:oklch(21.5% 0.012 170); --panel2:oklch(24.5% 0.013 170); --line:oklch(33% 0.013 170);
+    --ink:oklch(94% 0.006 170); --muted:oklch(75% 0.01 170);
+    --kraft:oklch(72% 0.12 170); --kraft-soft:oklch(30% 0.05 170);
+    --pass:oklch(76% 0.13 150); --check:oklch(80% 0.13 80); --fail:oklch(72% 0.15 25); --stage:#000; --shadow:none; color-scheme:dark;
   }
 }
 :root[data-theme="dark"]{
-  --bg:#15191C; --panel:#1F2529; --panel2:#262D32; --ink:#E7ECEE; --muted:#9AA6AD; --line:#343E44;
-  --kraft:#D19B5E; --kraft-soft:#3A2D1F; --pass:#3DBE72; --check:#F0B429; --fail:#FF5A52; --stage:#000;
+    --bg:oklch(17% 0.01 170); --panel:oklch(21.5% 0.012 170); --panel2:oklch(24.5% 0.013 170); --line:oklch(33% 0.013 170);
+    --ink:oklch(94% 0.006 170); --muted:oklch(75% 0.01 170);
+    --kraft:oklch(72% 0.12 170); --kraft-soft:oklch(30% 0.05 170);
+    --pass:oklch(76% 0.13 150); --check:oklch(80% 0.13 80); --fail:oklch(72% 0.15 25); --stage:#000; --shadow:none; color-scheme:dark;
 }
 *,*::before,*::after{box-sizing:border-box}
 [hidden]{display:none!important}
 html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
 body{height:100%;margin:0;background:var(--bg);color:var(--ink);
-  font-family:"Barlow",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased}
-h1,h2,h3,.cond{font-family:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;letter-spacing:.01em}
+  font-family:var(--sans);font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased}
+h1,h2,h3,.cond{font-family:var(--sans);letter-spacing:-.01em}
 button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:3px solid var(--zone);outline-offset:2px}
 
 .app{min-height:100%;display:flex;flex-direction:column}
-header.top{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line)}
-.brand{display:flex;align-items:center;gap:10px;min-width:0}
-.mark{width:34px;height:34px;border-radius:6px;background:var(--kraft);display:grid;place-items:center;flex:none}
-.mark svg{width:22px;height:22px}
-.brand h1{margin:0;font-size:22px;font-weight:700;line-height:1}
-.brand .sub{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ai-pill{margin-left:auto;background:none;font-size:13px;padding:4px 10px;border-radius:99px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.topbar{position:sticky;top:0;z-index:30;background:var(--panel);border-bottom:1px solid var(--line)}
+.topbar-inner{max-width:1280px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:12px}
+.brand{display:flex;align-items:center;gap:10px;min-width:0;color:var(--ink);text-decoration:none}
+.brand-mark{width:34px;height:34px;border-radius:8px;background:var(--kraft);color:#fff;display:grid;place-items:center;flex:none}
+.brand-text{font-weight:700;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand-text small{display:block;font-weight:500;color:var(--muted);font-size:12px;letter-spacing:.04em;text-transform:uppercase}
+.spacer{flex:1}
+.icon-btn{border:1px solid var(--line);background:var(--panel2);border-radius:8px;height:36px;min-width:36px;padding:0 10px;cursor:pointer;color:var(--muted);display:inline-grid;place-items:center}
+.icon-btn:hover{color:var(--ink)}
+.seg{display:flex;gap:4px}
+.seg button{min-height:34px;padding:0 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel);font-weight:600;font-size:13px;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--kraft-soft);border-color:var(--kraft);color:var(--kraft)}
+.page-head{margin:2px 0 12px}
+.page-head h1{font-size:22px;margin:0;letter-spacing:-.01em}
+.page-head p{margin:2px 0 0;color:var(--muted);font-size:14px}
+@media (max-width:560px){.brand-text small{display:none}.ai-pill{display:none}}
+.ai-pill{background:none;font-size:13px;padding:4px 10px;border-radius:99px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
 .ai-pill.ok{border-color:var(--pass);color:var(--pass)}
 .ai-pill.bad{border-color:var(--fail);color:var(--fail)}
 .ai-pill.warn{border-color:var(--check);color:var(--check)}
 
-main{flex:1;padding:14px 14px calc(var(--tab-h) + 24px + env(safe-area-inset-bottom,0px));max-width:1280px;width:100%;margin:0 auto}
+main{flex:1;padding:16px 16px calc(40px + env(safe-area-inset-bottom,0px));max-width:1280px;width:100%;margin:0 auto}
 .view{display:none}.view.on{display:block}
 
 /* Inspect view */
@@ -70,7 +85,7 @@ main{flex:1;padding:14px 14px calc(var(--tab-h) + 24px + env(safe-area-inset-bot
 .stage-empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:#C9D1D5;padding:20px}
 .stage-empty p{margin:6px 0 0;max-width:34ch;font-size:15px;color:#9AA6AD}
 .status-band{position:absolute;left:0;right:0;top:0;display:flex;justify-content:space-between;gap:8px;padding:8px;pointer-events:none}
-.chip{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:16px;padding:3px 10px;border-radius:5px;background:rgba(0,0,0,.62);color:#fff}
+.chip{font-family:var(--sans);font-weight:600;font-size:16px;padding:3px 10px;border-radius:5px;background:rgba(0,0,0,.62);color:#fff}
 .chip.live{background:var(--pass)}
 .chip.busy{background:#2F6FB5}
 .chip.warn{background:#8A6400}
@@ -88,7 +103,7 @@ main{flex:1;padding:14px 14px calc(var(--tab-h) + 24px + env(safe-area-inset-bot
 .btn.sm{padding:7px 12px;min-height:36px;font-size:14px}
 .grow{flex:1 1 auto}
 
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;box-shadow:var(--shadow)}
 .panel h2{margin:0 0 8px;font-size:20px;font-weight:600}
 .panel + .panel{margin-top:14px}
 .muted{color:var(--muted)}
@@ -96,13 +111,13 @@ main{flex:1;padding:14px 14px calc(var(--tab-h) + 24px + env(safe-area-inset-bot
 
 .counts{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .count{background:var(--panel2);border-radius:8px;padding:8px 6px;text-align:center}
-.count strong{display:block;font-family:"Barlow Condensed",sans-serif;font-size:30px;line-height:1.05;font-weight:700}
+.count strong{display:block;font-family:var(--sans);font-size:30px;line-height:1.05;font-weight:700}
 .count span{font-size:13px;color:var(--muted)}
 .count.p strong{color:var(--pass)} .count.f strong{color:var(--fail)} .count.c strong{color:var(--check)}
 
 .result{display:grid;grid-template-columns:96px 1fr;gap:12px;align-items:start}
 .result img{width:96px;height:72px;object-fit:cover;border-radius:6px;background:var(--panel2)}
-.verdict{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:34px;line-height:1}
+.verdict{font-family:var(--sans);font-weight:700;font-size:34px;line-height:1}
 .v-PASS{color:var(--pass)} .v-FAIL{color:var(--fail)} .v-CHECK{color:var(--check)} .v-UNCLEAR,.v-ERROR,.v-PENDING,.v-CAPTURED{color:var(--muted)}
 ul.defects{margin:6px 0 0;padding-left:18px}
 ul.defects li{margin:2px 0}
@@ -137,19 +152,20 @@ ol.steps li{margin:4px 0}
 .list{display:grid;gap:8px}
 .item{display:grid;grid-template-columns:76px 1fr auto;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px}
 .item img{width:76px;height:57px;object-fit:cover;border-radius:5px;background:var(--panel2)}
-.item .v{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:20px;line-height:1}
+.item .v{font-family:var(--sans);font-weight:700;font-size:20px;line-height:1}
 .item .meta{font-size:13px;color:var(--muted)}
 .item .sum{font-size:14px}
 .item.acked{opacity:.6}
 .empty{padding:28px 12px;text-align:center;color:var(--muted)}
 
 /* Tabs */
-nav.tabs{position:fixed;left:0;right:0;bottom:0;display:grid;grid-template-columns:repeat(4,1fr);background:var(--panel);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);z-index:20}
-nav.tabs button{background:none;border:0;height:var(--tab-h);display:grid;place-items:center;align-content:center;gap:2px;color:var(--muted);font-weight:600;font-size:13px;position:relative}
-nav.tabs button svg{width:24px;height:24px}
-nav.tabs button[aria-selected=true]{color:var(--kraft)}
-nav.tabs button[aria-selected=true]::before{content:"";position:absolute;top:0;left:22%;right:22%;height:3px;background:var(--kraft);border-radius:0 0 3px 3px}
-nav.tabs .badge{position:absolute;top:8px;left:calc(50% + 8px);min-width:18px;height:18px;border-radius:9px;background:var(--fail);color:#fff;font-size:11px;display:none;place-items:center;padding:0 5px}
+nav.tabs{max-width:1280px;margin:0 auto;padding:0 8px;display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+nav.tabs::-webkit-scrollbar{display:none}
+nav.tabs button{flex:none;display:flex;align-items:center;gap:7px;padding:10px 12px;border:0;background:none;color:var(--muted);font-weight:600;font-size:14.5px;border-bottom:3px solid transparent;position:relative;white-space:nowrap}
+nav.tabs button svg{width:18px;height:18px}
+nav.tabs button:hover{color:var(--ink)}
+nav.tabs button[aria-selected=true]{color:var(--kraft);border-bottom-color:var(--kraft)}
+nav.tabs .badge{min-width:18px;height:18px;border-radius:9px;background:var(--fail);color:#fff;font-size:11px;display:none;place-items:center;padding:0 5px}
 nav.tabs .badge.show{display:grid}
 
 /* Alarm */
@@ -163,17 +179,17 @@ nav.tabs .badge.show{display:grid}
 .alarm img{max-width:min(420px,80vw);max-height:32vh;border-radius:8px;border:3px solid #fff;object-fit:contain;background:#000}
 .alarm ul{margin:0;padding:0;list-style:none;font-size:18px;max-width:36ch}
 .alarm .ack{background:#fff;color:#8E1616;border:0;font-weight:700;font-size:22px;padding:16px 40px;border-radius:10px;min-height:60px}
-.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--tab-h) + 16px + env(safe-area-inset-bottom,0px));z-index:40;background:var(--check);color:#1b1300;padding:12px 18px;border-radius:10px;font-weight:600;max-width:min(92vw,520px);box-shadow:0 6px 20px rgba(0,0,0,.25);display:none}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(24px + env(safe-area-inset-bottom,0px));z-index:40;background:var(--check);color:#1b1300;padding:12px 18px;border-radius:10px;font-weight:600;max-width:min(92vw,520px);box-shadow:0 6px 20px rgba(0,0,0,.25);display:none}
 .toast.show{display:block}
 /* Setup steps */
 .setup-wrap{max-width:900px;margin:0 auto;display:grid;gap:14px}
 .setup-intro h2{margin:0;font-size:28px;font-weight:700}
 .setup-intro p{margin:4px 0 0;color:var(--muted)}
-.step{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:12px}
+.step{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:12px;box-shadow:var(--shadow)}
 .step-h{display:flex;align-items:center;gap:12px}
 .step-h h3{margin:0;font-size:22px;font-weight:600}
 .step-h .sub{font-size:14px;color:var(--muted)}
-.num{flex:none;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:19px;background:var(--panel2);border:2px solid var(--line);color:var(--muted)}
+.num{flex:none;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-family:var(--sans);font-weight:700;font-size:19px;background:var(--panel2);border:2px solid var(--line);color:var(--muted)}
 .step.done .num{background:var(--pass);border-color:var(--pass);color:#fff}
 .step.done .num span{display:none}
 .step.done .num::after{content:"✓";font-size:18px}
@@ -190,22 +206,27 @@ nav.tabs .badge.show{display:grid}
 </head>
 <body>
 <div class="app">
-  <header class="top">
-    <div class="brand">
-      <div class="mark" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round"><path d="M3 8l9-4 9 4-9 4-9-4z"/><path d="M3 8v8l9 4 9-4V8"/><path d="M12 12v8"/></svg>
-      </div>
-      <div style="min-width:0">
-        <h1>Line QC Camera</h1>
-        <div class="sub" id="hdrSub">No line set</div>
-      </div>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M4 8l8-4 8 4v9l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v9"/></svg></span>
+        <span class="brand-text">Line QC Camera<small>GoldenWest · Ontario</small></span></div>
+      <span class="spacer"></span>
+      <button class="ai-pill" id="aiPill" type="button">Checking AI…</button>
+      <div class="seg" id="topLang" role="group" aria-label="Language / Idioma" data-no-i18n><button type="button" data-lang="en">EN</button><button type="button" data-lang="es">ES</button></div>
+      <button class="icon-btn" id="themeBtn" type="button" title="Light / dark" aria-label="Switch light or dark"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></svg></button>
     </div>
-    <button class="ai-pill" id="aiPill" type="button">Checking AI…</button>
+    <nav class="tabs" role="tablist" aria-label="Sections">
+      <button role="tab" aria-selected="false" data-v="setup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Setup</button>
+      <button role="tab" aria-selected="true" data-v="inspect"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Inspect</button>
+      <button role="tab" aria-selected="false" data-v="log"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h7M9 7h3"/></svg>Log</button>
+      <button role="tab" aria-selected="false" data-v="alerts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>Alerts<span class="badge" id="alertBadge">0</span></button>
+    </nav>
   </header>
 
   <main>
     <!-- INSPECT -->
     <section class="view on" id="v-inspect" aria-label="Inspect">
+      <div class="page-head"><h1 id="hdrSub" data-no-i18n>No machine set</h1></div>
       <div class="inspect-grid">
         <div id="inspectCamSlot"><div id="camBlock">
           <div class="notice go-setup" id="needSetup" hidden style="margin:0 0 10px">
@@ -413,12 +434,6 @@ nav.tabs .badge.show{display:grid}
     </section>
   </main>
 
-  <nav class="tabs" role="tablist">
-    <button role="tab" aria-selected="false" data-v="setup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Setup</button>
-    <button role="tab" aria-selected="true" data-v="inspect"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Inspect</button>
-    <button role="tab" aria-selected="false" data-v="log"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h7M9 7h3"/></svg>Log</button>
-    <button role="tab" aria-selected="false" data-v="alerts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>Alerts<span class="badge" id="alertBadge">0</span></button>
-  </nav>
 </div>
 
 <div class="alarm" id="alarm" role="alertdialog" aria-live="assertive" aria-labelledby="alarmTitle">
@@ -431,6 +446,7 @@ nav.tabs .badge.show{display:grid}
 </div>
 <div class="toast" id="toast" role="status"></div>
 
+<script src="/i18n.js"></script>
 <script>
 (() => {
 "use strict";
@@ -439,6 +455,12 @@ const store = {
   get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch{ return d; } },
   set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} }
 };
+const I18N = window.QCI18N || {tr: s => s, getLang: () => "en", setLang(){}, applyLang(){}};
+const tr = s => I18N.tr(s);
+const es = () => I18N.getLang() === "es";
+// AI text comes back in English and Spanish; show the one that matches the screen language
+const sumOf = e => (es() && e.summary_es) || e.summary || "";
+const issueOf = d => (es() && d.issue_es) || d.issue || "";
 function el(tag, attrs = {}, ...kids){
   const n = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
@@ -563,7 +585,10 @@ function bindSetup(){
   tog("#sAuto", "autoStart"); tog("#sSound", "sound"); tog("#sVib", "vibrate"); tog("#sCheckAlarm", "checkAlarm");
   renderRef(); updateHeader();
 }
-function updateHeader(){ $("#hdrSub").textContent = [S.line || "No line set", S.job].filter(Boolean).join(" — "); }
+function updateHeader(){
+  const cust = (S.customer || "").trim(), ord = (S.order || "").trim();
+  $("#hdrSub").textContent = [S.line || tr("No machine set"), cust, ord ? tr("Order #") + ord : ""].filter(Boolean).join(" — ");
+}
 function renderRef(){
   const ph = $("#refPh"); ph.textContent = "";
   if (refDataUrl) ph.append(el("img", {src:refDataUrl, alt:"Good sample"})); else ph.textContent = "No sample yet";
@@ -789,7 +814,8 @@ async function runInspection(canvas, source){
     const v = String(r && r.verdict || "").toUpperCase();
     entry.verdict = ["PASS","CHECK","FAIL","UNCLEAR"].includes(v) ? v : "CHECK";
     entry.summary = String(r && r.summary || "").slice(0, 300) || (entry.verdict === "PASS" ? "No issues seen." : "See details.");
-    entry.defects = Array.isArray(r && r.defects) ? r.defects.slice(0, 8).map(d => ({check:String(d.check || ""), issue:String(d.issue || ""), severity:d.severity === "major" ? "major" : "minor"})) : [];
+    entry.summary_es = String(r && r.summary_es || "").slice(0, 300);
+    entry.defects = Array.isArray(r && r.defects) ? r.defects.slice(0, 8).map(d => ({check:String(d.check || ""), issue:String(d.issue || ""), issue_es:String(d.issue_es || ""), severity:d.severity === "major" ? "major" : "minor"})) : [];
     entry.confidence = Number.isFinite(Number(r && r.confidence)) ? Math.round(Number(r.confidence)) : null;
   } catch (e) {
     entry.verdict = "ERROR";
@@ -817,8 +843,8 @@ function finishEntry(entry){
   renderCounts(); renderLast(entry);
   log.unshift(entry); if (log.length > 150) log.length = 150; store.set("qc.log", log); renderLog();
   if (entry.verdict === "FAIL" || (entry.verdict === "CHECK" && S.checkAlarm)) { showAlarm(entry); pushEvent(entry); }
-  else if (entry.verdict === "CHECK") { chirp(); toast("Check: " + entry.summary); pushEvent(entry); }
-  else if (entry.verdict === "ERROR") toast(entry.summary);
+  else if (entry.verdict === "CHECK") { chirp(); toast(tr("Check: " + sumOf(entry))); pushEvent(entry); }
+  else if (entry.verdict === "ERROR") toast(tr(entry.summary));
 }
 function renderCounts(){
   $("#cInsp").textContent = counts.insp; $("#cPass").textContent = counts.pass; $("#cCheck").textContent = counts.check; $("#cFail").textContent = counts.fail;
@@ -826,14 +852,14 @@ function renderCounts(){
 }
 function defectList(defects){
   const ul = el("ul", {class:"defects"});
-  defects.forEach(d => ul.append(el("li", {}, (d.check ? d.check + ": " : "") + d.issue, el("span", {class:"sev " + d.severity, text:d.severity}))));
+  defects.forEach(d => ul.append(el("li", {}, (d.check ? tr(d.check) + ": " : "") + issueOf(d), el("span", {class:"sev " + d.severity, text:d.severity}))));
   return ul;
 }
 function renderLast(e){
   const box = $("#lastResult"); box.className = ""; box.textContent = "";
   const right = el("div", {}, el("div", {class:"verdict v-" + e.verdict, text:e.verdict === "PENDING" ? "Inspecting…" : e.verdict}),
     el("div", {class:"small muted", text:fmtTime(e.ts) + (e.confidence != null ? " · confidence " + e.confidence + "%" : "") + (e.source !== "auto" ? " · " + e.source : "")}),
-    el("div", {style:"margin-top:4px", text:e.summary}));
+    el("div", {style:"margin-top:4px", text:sumOf(e)}));
   if (e.defects.length) right.append(defectList(e.defects));
   box.append(el("div", {class:"result"}, el("img", {src:e.thumb, alt:"Inspected product"}), right));
 }
@@ -845,7 +871,7 @@ function renderLog(){
   const rows = log.filter(e => f === "all" || e.verdict === f);
   if (!rows.length) { list.append(el("div", {class:"empty", text:"No inspections to show."})); return; }
   rows.forEach(e => list.append(el("div", {class:"item"}, el("img", {src:e.thumb, alt:"", loading:"lazy"}),
-    el("div", {}, el("div", {class:"sum", text:e.summary}), el("div", {class:"meta", text:fmtDate(e.ts) + (e.line ? " · " + e.line : "")})),
+    el("div", {}, el("div", {class:"sum", text:sumOf(e)}), el("div", {class:"meta", text:fmtDate(e.ts) + (e.line ? " · " + e.line : "")})),
     el("div", {class:"v v-" + e.verdict, text:e.verdict}))));
 }
 $("#logFilter").addEventListener("change", renderLog);
@@ -870,7 +896,7 @@ async function pushEvent(entry){
   if (!accessCode) return;
   try {
     const r = await api("/api/events", {method:"POST", body:JSON.stringify({ts:entry.ts, line:entry.line || "", job:entry.job || "", verdict:entry.verdict,
-      summary:entry.summary, defects:entry.defects.map(d => `${d.check}: ${d.issue} (${d.severity})`).join("; "), thumb:entry.thumb, device:deviceId})});
+      summary:entry.summary, summary_es:entry.summary_es || "", defects:entry.defects.map(d => `${d.check}: ${d.issue} (${d.severity})`).join("; "), thumb:entry.thumb, device:deviceId})});
     entry.eventId = r.id;
   } catch {}
 }
@@ -886,7 +912,7 @@ async function pollEvents(){
       if (seenEvents.has(d.id)) return; seenEvents.add(d.id);
       if (firstPoll || d.device === deviceId || d.ts < feedStart) return;
       if (!onAlerts) { unseenAlerts++; updateBadge(); }
-      if (d.verdict === "FAIL" && supAlarm.checked && !d.ack) showAlarm({verdict:"FAIL", line:d.line, job:d.job, ts:d.ts, thumb:d.thumb, summary:d.summary, eventId:d.id,
+      if (d.verdict === "FAIL" && supAlarm.checked && !d.ack) showAlarm({verdict:"FAIL", line:d.line, job:d.job, ts:d.ts, thumb:d.thumb, summary:d.summary, summary_es:d.summary_es, eventId:d.id,
         defects:d.defects ? d.defects.split("; ").map(s => ({check:"", issue:s, severity:""})) : []}, true);
     });
     firstPoll = false;
@@ -903,7 +929,7 @@ function renderSup(events){
     const ackBtn = d.ack ? el("span", {class:"small muted", text:"Acknowledged"}) :
       el("button", {class:"btn sm", text:"Acknowledge", onclick:() => ackEvent(d.id)});
     list.append(el("div", {class:"item" + (d.ack ? " acked" : "")}, el("img", {src:d.thumb || "", alt:"", loading:"lazy"}),
-      el("div", {}, el("div", {class:"v v-" + d.verdict, text:d.verdict + (d.line ? " — " + d.line : "")}), el("div", {class:"sum", text:d.summary}),
+      el("div", {}, el("div", {class:"v v-" + d.verdict, text:d.verdict + (d.line ? " — " + d.line : "")}), el("div", {class:"sum", text:sumOf(d)}),
         el("div", {class:"meta", text:fmtDate(d.ts) + (d.job ? " · " + d.job : "")})), ackBtn));
   });
 }
@@ -930,8 +956,8 @@ function showAlarm(entry, remote){
   $("#alarmWhere").textContent = [entry.line || "Line not set", entry.job, fmtTime(entry.ts)].filter(Boolean).join(" · ");
   $("#alarmImg").src = entry.thumb;
   const ul = $("#alarmList"); ul.textContent = "";
-  ul.append(el("li", {text:entry.summary}));
-  entry.defects.slice(0, 4).forEach(d => ul.append(el("li", {style:"font-size:16px;opacity:.9", text:"• " + (d.check ? d.check + ": " : "") + d.issue})));
+  ul.append(el("li", {text:sumOf(entry)}));
+  entry.defects.slice(0, 4).forEach(d => ul.append(el("li", {style:"font-size:16px;opacity:.9", text:"• " + (d.check ? tr(d.check) + ": " : "") + issueOf(d)})));
   a.classList.add("show"); if (entry.verdict === "FAIL" || entry.verdict === "CAMERA") a.classList.add("pulse");
   if (S.vibrate && navigator.vibrate) navigator.vibrate([400, 150, 400, 150, 400]);
   if (S.sound || remote) { siren(); clearInterval(alarmTimer); alarmTimer = setInterval(siren, 1400); }
@@ -951,7 +977,7 @@ $("#btnTestAlarm").addEventListener("click", () => {
   let c;
   if (camOn) c = grab(640);
   else { c = document.createElement("canvas"); c.width = 320; c.height = 180; const x = c.getContext("2d");
-    x.fillStyle = "#9C6A34"; x.fillRect(0, 0, 320, 180); x.fillStyle = "#fff"; x.font = "bold 40px Barlow Condensed, sans-serif"; x.textAlign = "center"; x.fillText("TEST", 160, 105); }
+    x.fillStyle = "#00694b"; x.fillRect(0, 0, 320, 180); x.fillStyle = "#fff"; x.font = "bold 40px 'Segoe UI', sans-serif"; x.textAlign = "center"; x.fillText("TEST", 160, 105); }
   const entry = {ts:Date.now(), line:S.line, job:S.job, verdict:"FAIL", thumb:thumbOf(c),
     summary:"TEST ALARM — not a real defect.", defects:[{check:"Test", issue:"Alarm test from Setup", severity:"minor"}]};
   showAlarm(entry); pushEvent(entry);
@@ -988,7 +1014,22 @@ $("#btnFinish").addEventListener("click", () => {
   if (camOn && !isArmed) toast("Click Start inspecting when the line is running.");
 });
 
+/* ---------- Language and theme ---------- */
+document.querySelectorAll("#topLang [data-lang]").forEach(b => b.addEventListener("click", () => {
+  if (b.dataset.lang === I18N.getLang()) return;
+  I18N.setLang(b.dataset.lang); I18N.applyLang();
+  // redraw the parts that hold AI text so it switches language too
+  updateHeader(); renderLog(); if (log[0]) renderLast(log[0]); pollEvents();
+}));
+function setTheme(t){ if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme; }
+setTheme(store.get("qc.theme", ""));
+$("#themeBtn").addEventListener("click", () => {
+  const dark = document.documentElement.dataset.theme ? document.documentElement.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  const t = dark ? "light" : "dark"; setTheme(t); store.set("qc.theme", t);
+});
+
 /* ---------- Boot ---------- */
+I18N.applyLang();
 bindSetup(); renderCounts(); renderLog(); setChip("Idle", "");
 showTab(S.setupDone ? "inspect" : "setup"); refreshSteps();
 if (S.setupDone && S.autoStart && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
