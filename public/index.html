@@ -340,7 +340,7 @@ dialog.big .body{padding:14px;display:grid;gap:6px}
         </div>
 
         <div class="step" id="st2">
-          <div class="step-h"><div class="num"><span>2</span></div><div><h3>Machine and job</h3><div class="sub">Shows on every alarm and in the log. Scan the job ticket barcode at any time to fill in the order.</div></div></div>
+          <div class="step-h"><div class="num"><span>2</span></div><div><h3>Machine and job</h3><div class="sub">Shows on every alarm and in the log.</div></div></div>
           <div class="two">
             <label class="f">Machine
               <select id="sMachine"></select>
@@ -453,7 +453,7 @@ dialog.big .body{padding:14px;display:grid;gap:6px}
 
     <!-- PHOTOS -->
     <section class="view" id="v-photos" aria-label="Photos">
-      <div class="page-head"><h1>Photo archive</h1><p>Up to 5 photos per order: the good sample plus a few products spread through the run (a Fail is always saved first).</p></div>
+      <div class="page-head"><h1>Photo archive</h1><p>Up to 5 photos per order: the good sample plus a few products spread through the run (a Fail is always saved first). Photos are kept for 1 year.</p></div>
       <div class="panel">
         <form class="ph-search" id="phForm">
           <input type="text" id="phOrder" placeholder="Order #" autocomplete="off" inputmode="numeric">
@@ -647,8 +647,8 @@ function bindSetup(){
   txt("#sLine", "line", updateHeader);
   // Customer + order make up the job label used on alarms, alerts and the log
   if (S.customer === "" && S.order === "" && S.job) S.customer = S.job; // carry over an older job entry
-  txt("#sCust", "customer", () => { setJob(); queueOrderSave(); }); txt("#sOrder", "order", setJob); txt("#sQty", "qty", queueOrderSave); setJob();
-  $("#sOrder").addEventListener("change", () => { const changed = (S.order || "").trim() !== countsOrder; onOrderChange(); if (changed) fillFromOrder(true); });
+  txt("#sCust", "customer", setJob); txt("#sOrder", "order", setJob); txt("#sQty", "qty"); setJob();
+  $("#sOrder").addEventListener("change", onOrderChange);
   // Machine list: edit MACHINES to add or rename machines
   const ms = $("#sMachine"), other = $("#sLine");
   ms.append(el("option", {value:"", text:"Choose a machine…"}));
@@ -1237,76 +1237,6 @@ $("#btnTestAlarm").addEventListener("click", () => {
     summary:"TEST ALARM — not a real defect.", defects:[{check:"Test", issue:"Alarm test from Setup", severity:"minor"}]};
   showAlarm(entry); pushEvent(entry);
 });
-
-/* ---------- Order details shared by all machines ---------- */
-let orderSaveTimer = null;
-function queueOrderSave(){
-  clearTimeout(orderSaveTimer);
-  orderSaveTimer = setTimeout(() => {
-    const order = (S.order || "").trim(); if (!order || !accessCode) return;
-    api("/api/orders", {method:"POST", body:JSON.stringify({order, customer:S.customer, qty:S.qty})}).catch(() => {});
-  }, 1500);
-}
-// look up this order's customer and quantity from another machine; overwrite=true replaces what's in the fields
-async function fillFromOrder(overwrite){
-  const order = (S.order || "").trim(); if (!order || !accessCode) return false;
-  try {
-    const d = await api("/api/orders?order=" + encodeURIComponent(order));
-    if (S.order.trim() !== order) return false;           // order changed again while we waited
-    let filled = false;
-    if (d.customer && (overwrite || !S.customer.trim())) { S.customer = d.customer; $("#sCust").value = d.customer; filled = true; }
-    if (d.qty && (overwrite || !String(S.qty).trim())) { S.qty = d.qty; $("#sQty").value = d.qty; filled = true; }
-    if (filled) { setJob(); save(); refreshSteps(); }
-    return !!(d.customer || d.qty);
-  } catch { return false; }
-}
-function setOrderFields(order, cust, qty){
-  const changed = order !== (S.order || "").trim();
-  S.order = order; $("#sOrder").value = order;
-  if (changed) { S.customer = ""; S.qty = ""; }      // details of the old order don't belong to the new one
-  if (cust) S.customer = cust;
-  if (qty) S.qty = qty;
-  $("#sCust").value = S.customer; $("#sQty").value = S.qty;
-  setJob(); save(); onOrderChange(); refreshSteps();
-}
-
-/* ---------- Barcode scanner ---------- */
-// A USB scanner types the barcode very fast and ends with Enter (or Tab). Anything typed that fast
-// is treated as a scanned job ticket, wherever the cursor is. A barcode may hold just the order
-// number, or "order|customer|quantity" (separated by | ; or Tab).
-let scan = null;
-document.addEventListener("keydown", e => {
-  if (e.ctrlKey || e.altKey || e.metaKey) return;
-  const now = performance.now();
-  if (e.key === "Enter" || e.key === "Tab") {
-    const s = scan; scan = null;
-    if (s && s.chars.length >= 4 && now - s.last < 100 && (s.last - s.first) / (s.chars.length - 1) < 35) {
-      e.preventDefault(); e.stopPropagation();
-      const t = s.target;
-      // undo the characters the scanner typed into whatever field had the cursor
-      if (t && t.tagName === "INPUT" && t.type === "text") { t.value = s.before; t.dispatchEvent(new Event("input", {bubbles:true})); }
-      applyScan(s.chars.join(""));
-    }
-    return;
-  }
-  if (e.key.length !== 1) return;
-  if (!scan || now - scan.last > 80) {
-    const t = document.activeElement;
-    scan = {chars:[], first:now, last:now, target:t, before:t && t.tagName === "INPUT" ? t.value : ""};
-  }
-  scan.chars.push(e.key); scan.last = now;
-}, true);
-async function applyScan(raw){
-  const parts = raw.split(/[|;\t]/).map(x => x.trim()).filter(Boolean);
-  if (!parts.length) return;
-  const order = parts[0].slice(0, 40); let cust = "", qty = "";
-  parts.slice(1).forEach(x => { if (!qty && /^[\d,]+$/.test(x)) qty = x.replace(/,/g, ""); else if (!cust) cust = x; });
-  setOrderFields(order, cust, qty);
-  if (!(cust && qty)) await fillFromOrder(false);
-  queueOrderSave();
-  if (S.customer.trim()) toast(tr(`Order ${order} scanned.`) + (refValid() ? "" : " " + tr("Take a new good sample in Setup step 6.")));
-  else { toast(tr(`Order ${order} scanned. Enter the customer and quantity in Setup step 2.`)); showTab("setup"); $("#sCust").focus(); }
-}
 
 /* ---------- Setup steps ---------- */
 function stepState(){

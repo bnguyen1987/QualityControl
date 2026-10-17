@@ -53,4 +53,4 @@ turn on "Sound the alarm on this phone".
 - netlify/functions/inspect.mts — sends photos to the AI (API key stays on the server)
 - netlify/functions/events.mts — shared Fail/Check alert feed (Netlify Blobs)
 - netlify/functions/photos.mts — photo archive by order number (Netlify Blobs)
-- netlify/functions/orders.mts — customer + quantity per order, shared by all machines (filled by barcode scans)
+- netlify/functions/photos-cleanup.mts — runs daily, deletes photos older than 1 year (KEEP_DAYS)
