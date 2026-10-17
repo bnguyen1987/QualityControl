@@ -30,7 +30,7 @@ function buildPrompt(s: { line?: string; job?: string; checks?: string[]; notes?
 ${hasRef
     ? "Image 1 is the APPROVED GOOD SAMPLE from the same camera position. Image 2 is the PRODUCT TO INSPECT. Compare the product against the good sample."
     : "The image is the PRODUCT TO INSPECT. No good sample is available, so judge against normal corrugated box quality."}
-Line: ${clip(s.line, 80) || "not given"}. Job: ${clip(s.job, 120) || "not given"}.
+Machine: ${clip(s.line, 80) || "not given"}. Customer: ${clip(s.job, 120) || "not given"}.
 Check only these items:
 ${list}
 ${s.notes && String(s.notes).trim() ? "Job notes from the plant: " + clip(s.notes, 1500).trim() : ""}

@@ -267,7 +267,7 @@ nav.tabs .badge.show{display:grid}
       <div class="setup-wrap">
         <div class="setup-intro">
           <h2 class="cond">Set up this camera</h2>
-          <p>Work through the steps in order. A step turns green when it's done. When you change jobs later, only steps 2, 5 and 6 need updating.</p>
+          <p>Work through the steps in order. A step turns green when it's done. When a new order starts, only steps 2, 5 and 6 need updating.</p>
         </div>
 
         <div class="step" id="st1">
@@ -285,8 +285,11 @@ nav.tabs .badge.show{display:grid}
               <select id="sMachine"></select>
               <input type="text" id="sLine" placeholder="Type the machine name" hidden style="margin-top:6px">
             </label>
-            <label class="f">Job / product
-              <input type="text" id="sJob" placeholder="e.g. RSC 12x10x8, 2-color, customer ABC">
+            <label class="f">Customer name
+              <input type="text" id="sCust" placeholder="e.g. ABC Produce">
+            </label>
+            <label class="f">Order #
+              <input type="text" id="sOrder" inputmode="numeric" placeholder="e.g. 123456">
             </label>
           </div>
         </div>
@@ -463,7 +466,7 @@ const CHECKS = [
   {id:"bundle", label:"Bundle & strapping",           hint:"Straps present, bundle square and even"},
   {id:"tag",    label:"Load tag",                     hint:"Tag present and readable"}
 ];
-const DEFAULTS = {line:"", job:"", checks:["print","ink","score","die","joint","damage"], notes:"",
+const DEFAULTS = {line:"", job:"", customer:"", order:"", checks:["print","ink","score","die","joint","damage"], notes:"",
   autoStart:false, camId:"", tier:"fast", everyN:1, sens:6, settle:250, sound:true, vibrate:true, checkAlarm:false,
   zone:{x:.25, y:.08, w:.5, h:.84}};
 const S = Object.assign({}, DEFAULTS, store.get("qc.settings", {}));
@@ -528,7 +531,11 @@ function bindSetup(){
     box.append(el("label", {}, cb, el("span", {}, c.label, el("small", {text:c.hint}))));
   });
   const txt = (id, key, after) => { const i = $(id); i.value = S[key]; i.addEventListener("input", () => { S[key] = i.value; save(); after && after(); }); };
-  txt("#sLine", "line", updateHeader); txt("#sJob", "job", updateHeader);
+  txt("#sLine", "line", updateHeader);
+  // Customer + order make up the job label used on alarms, alerts and the log
+  if (S.customer === "" && S.order === "" && S.job) S.customer = S.job; // carry over an older job entry
+  const setJob = () => { S.job = [S.customer.trim(), S.order.trim() ? "Order #" + S.order.trim() : ""].filter(Boolean).join(" — "); save(); updateHeader(); };
+  txt("#sCust", "customer", setJob); txt("#sOrder", "order", setJob); setJob();
   // Machine list: edit MACHINES to add or rename machines
   const ms = $("#sMachine"), other = $("#sLine");
   ms.append(el("option", {value:"", text:"Choose a machine…"}));
@@ -769,7 +776,7 @@ function setChip(t, cls){ const c = $("#chipState"); c.textContent = t; c.classN
 /* ---------- AI inspection (prompt is built on the server) ---------- */
 async function runInspection(canvas, source){
   busy = true; setChip("Inspecting…", "busy");
-  const entry = {id:Date.now().toString(36) + Math.random().toString(36).slice(2, 5), ts:Date.now(), line:S.line, job:S.job, source,
+  const entry = {id:Date.now().toString(36) + Math.random().toString(36).slice(2, 5), ts:Date.now(), line:S.line, job:S.job, customer:S.customer, order:S.order, source,
     thumb:thumbOf(canvas), verdict:"PENDING", summary:"Inspecting…", defects:[], confidence:null};
   renderLast(entry);
   try {
@@ -777,7 +784,7 @@ async function runInspection(canvas, source){
     if (!aiOk) { entry.verdict = "ERROR"; entry.summary = "AI isn't ready: " + aiPill.textContent + "."; return; }
     const b64 = c => c.toDataURL("image/jpeg", .85).split(",")[1];
     const payload = {image:b64(canvas), reference: refDataUrl ? refDataUrl.split(",")[1] : "", tier:S.tier === "thorough" ? "thorough" : "fast",
-      settings:{line:S.line, job:S.job, checks:S.checks, notes:S.notes}};
+      settings:{line:S.line, job:S.customer, checks:S.checks, notes:S.notes}};
     const {result:r} = await api("/api/inspect", {method:"POST", body:JSON.stringify(payload)});
     const v = String(r && r.verdict || "").toUpperCase();
     entry.verdict = ["PASS","CHECK","FAIL","UNCLEAR"].includes(v) ? v : "CHECK";
@@ -845,9 +852,9 @@ $("#logFilter").addEventListener("change", renderLog);
 $("#btnClear").addEventListener("click", () => { if (!confirm("Clear the inspection log on this device?")) return; log = []; store.set("qc.log", log); renderLog(); });
 $("#btnExport").addEventListener("click", async () => {
   const q = v => '"' + String(v ?? "").replace(/"/g, '""') + '"';
-  const lines = [["Date","Time","Line","Job","Result","Summary","Defects","Confidence","Trigger"].join(",")];
+  const lines = [["Date","Time","Machine","Customer","Order #","Result","Summary","Defects","Confidence","Trigger"].join(",")];
   log.slice().reverse().forEach(e => { const d = new Date(e.ts);
-    lines.push([d.toLocaleDateString(), d.toLocaleTimeString(), e.line, e.job, e.verdict, e.summary,
+    lines.push([d.toLocaleDateString(), d.toLocaleTimeString(), e.line, e.customer ?? e.job, e.order ?? "", e.verdict, e.summary,
       e.defects.map(x => `${x.check}: ${x.issue} (${x.severity})`).join("; "), e.confidence ?? "", e.source].map(q).join(",")); });
   const url = URL.createObjectURL(new Blob([lines.join("\n")], {type:"text/csv"}));
   const a = el("a", {href:url, download:`qc-log-${new Date().toISOString().slice(0,10)}.csv`}); document.body.append(a); a.click(); a.remove();
@@ -954,7 +961,7 @@ $("#btnTestAlarm").addEventListener("click", () => {
 function stepState(){
   return {
     st1: aiOk,
-    st2: !!S.line.trim() && !!S.job.trim(),
+    st2: !!S.line.trim() && !!S.customer.trim() && !!S.order.trim(),
     st3: camOn,
     st4: !!bg,
     st5: S.checks.length > 0,
