@@ -33,14 +33,13 @@ Re-run the deploy command after any code change. Env var changes need a redeploy
 2. Copy `windows/Start Line QC.bat` to the PC's desktop and double-click it.
    (It opens Line QC in its own Chrome window that keeps working when Encore is in front.)
 3. Click "Allow" when Chrome asks to use the camera.
-4. Click the AI status (top right) and enter the access code.
-5. The site opens on the Setup page the first time. Work through steps 1–8:
+4. The site opens on the Setup page the first time. Work through steps 1–8:
    access code, machine and job, camera, trigger zone, checks, good sample,
    settings (tick auto-start) and alarm. Then click "Finish setup — go to Inspect".
    After that, the PC opens straight to Inspect.
-7. To start automatically after a reboot: Windows+R, type shell:startup, Enter,
+5. To start automatically after a reboot: Windows+R, type shell:startup, Enter,
    and copy the .bat file into that folder.
-8. Windows power settings: set Sleep to "Never" for this PC.
+6. Windows power settings: set Sleep to "Never" for this PC.
 
 Supervisors: open the site on a phone, enter the code, go to the Alerts tab and
 turn on "Sound the alarm on this phone".
