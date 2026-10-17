@@ -282,7 +282,8 @@ nav.tabs .badge.show{display:grid}
           <div class="step-h"><div class="num"><span>2</span></div><div><h3>Machine and job</h3><div class="sub">Shows on every alarm and in the log.</div></div></div>
           <div class="two">
             <label class="f">Machine
-              <input type="text" id="sLine" placeholder="e.g. Flexo Folder Gluer 1">
+              <select id="sMachine"></select>
+              <input type="text" id="sLine" placeholder="Type the machine name" hidden style="margin-top:6px">
             </label>
             <label class="f">Job / product
               <input type="text" id="sJob" placeholder="e.g. RSC 12x10x8, 2-color, customer ABC">
@@ -448,6 +449,16 @@ const fmtTime = ts => new Date(ts).toLocaleTimeString([], {hour:"2-digit", minut
 const fmtDate = ts => new Date(ts).toLocaleString([], {month:"short", day:"numeric", hour:"2-digit", minute:"2-digit"});
 
 /* ---------- Settings ---------- */
+const MACHINES = [
+  '42" EMBA FFG',
+  '66" McKinley FFG',
+  '66" Shanghai',
+  '86" Jumbo',
+  'Small Marumatsu FBDC',
+  'Large Marumatsu FBDC',
+  '142" Slitter',
+  '120" Slitter'
+];
 const CHECKS = [
   {id:"print",  label:"Print quality & registration", hint:"Smears, voids, missing print, off-register colors"},
   {id:"ink",    label:"Ink color",                    hint:"Color matches the good sample"},
@@ -523,7 +534,20 @@ function bindSetup(){
     box.append(el("label", {}, cb, el("span", {}, c.label, el("small", {text:c.hint}))));
   });
   const txt = (id, key, after) => { const i = $(id); i.value = S[key]; i.addEventListener("input", () => { S[key] = i.value; save(); after && after(); }); };
-  txt("#sLine", "line", updateHeader); txt("#sJob", "job", updateHeader); txt("#sNotes", "notes");
+  txt("#sLine", "line", updateHeader); txt("#sJob", "job", updateHeader);
+  // Machine list: edit MACHINES to add or rename machines
+  const ms = $("#sMachine"), other = $("#sLine");
+  ms.append(el("option", {value:"", text:"Choose a machine…"}));
+  MACHINES.forEach(m => ms.append(el("option", {value:m, text:m})));
+  ms.append(el("option", {value:"__other", text:"Other (type it in)"}));
+  const known = MACHINES.includes(S.line);
+  ms.value = !S.line ? "" : known ? S.line : "__other";
+  other.hidden = ms.value !== "__other";
+  ms.addEventListener("change", () => {
+    if (ms.value === "__other") { other.hidden = false; S.line = ""; other.value = ""; other.focus(); }
+    else { other.hidden = true; S.line = ms.value; other.value = ms.value; }
+    save(); updateHeader();
+  }); txt("#sNotes", "notes");
   const sel = (id, key, num) => { const i = $(id); i.value = String(S[key]); i.addEventListener("change", () => { S[key] = num ? Number(i.value) : i.value; save(); }); };
   if (!["fast","thorough"].includes(S.tier)) S.tier = "fast";
   if (!["fast","thorough"].includes(S.tier)) S.tier = "fast";
