@@ -165,6 +165,26 @@ nav.tabs .badge.show{display:grid}
 .alarm .ack{background:#fff;color:#8E1616;border:0;font-weight:700;font-size:22px;padding:16px 40px;border-radius:10px;min-height:60px}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--tab-h) + 16px + env(safe-area-inset-bottom,0px));z-index:40;background:var(--check);color:#1b1300;padding:12px 18px;border-radius:10px;font-weight:600;max-width:min(92vw,520px);box-shadow:0 6px 20px rgba(0,0,0,.25);display:none}
 .toast.show{display:block}
+/* Setup steps */
+.setup-wrap{max-width:900px;margin:0 auto;display:grid;gap:14px}
+.setup-intro h2{margin:0;font-size:28px;font-weight:700}
+.setup-intro p{margin:4px 0 0;color:var(--muted)}
+.step{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:12px}
+.step-h{display:flex;align-items:center;gap:12px}
+.step-h h3{margin:0;font-size:22px;font-weight:600}
+.step-h .sub{font-size:14px;color:var(--muted)}
+.num{flex:none;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:19px;background:var(--panel2);border:2px solid var(--line);color:var(--muted)}
+.step.done .num{background:var(--pass);border-color:var(--pass);color:#fff}
+.step.done .num span{display:none}
+.step.done .num::after{content:"✓";font-size:18px}
+.step .opt{margin-left:auto;font-size:13px;color:var(--muted)}
+.two{display:grid;gap:12px}
+@media (min-width:700px){.two{grid-template-columns:1fr 1fr}}
+#v-setup #btnArm,#v-setup #btnNow,#v-setup #needSetup{display:none!important}
+.finish{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;background:var(--kraft-soft);border:1px solid var(--kraft);border-radius:10px;padding:14px}
+.finish p{margin:0}
+.btn.big{font-size:18px;padding:14px 26px;min-height:54px}
+.go-setup{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 </style>
 </head>
@@ -187,7 +207,11 @@ nav.tabs .badge.show{display:grid}
     <!-- INSPECT -->
     <section class="view on" id="v-inspect" aria-label="Inspect">
       <div class="inspect-grid">
-        <div>
+        <div id="inspectCamSlot"><div id="camBlock">
+          <div class="notice go-setup" id="needSetup" hidden style="margin:0 0 10px">
+            <span>This camera hasn't been set up yet.</span>
+            <button class="btn sm primary" type="button" data-goto="setup">Go to Setup</button>
+          </div>
           <div class="stage-wrap">
             <div class="stage" id="stage">
               <video id="video" playsinline muted></video>
@@ -195,7 +219,7 @@ nav.tabs .badge.show{display:grid}
               <div class="stage-empty" id="stageEmpty">
                 <div>
                   <div class="cond" style="font-size:24px;font-weight:600;color:#fff">Camera is off</div>
-                  <p>Mount the device over the conveyor, then tap Start camera.</p>
+                  <p>Mount the camera over the conveyor, then click Start camera.</p>
                 </div>
               </div>
               <div class="status-band"><span class="chip" id="chipState">Idle</span><span class="chip" id="chipZone" hidden>Drag to draw the trigger zone</span></div>
@@ -217,7 +241,7 @@ nav.tabs .badge.show{display:grid}
             <div class="row" style="margin-top:8px"><label class="btn sm primary" for="snapInput">Take a photo to inspect</label>
             <input id="snapInput" type="file" accept="image/*" capture="environment" class="sr"></div>
           </div>
-        </div>
+        </div></div>
 
         <div>
           <div class="panel">
@@ -240,88 +264,117 @@ nav.tabs .badge.show{display:grid}
 
     <!-- SETUP -->
     <section class="view" id="v-setup" aria-label="Setup">
-      <div class="setup-grid">
-        <div class="panel form">
-          <h2>Line and job</h2>
-          <label class="f">Plant access code
-            <span class="hint">Ask your plant manager. Each device needs it once.</span>
-            <input type="text" id="sCode" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Access code">
-          </label>
-          <label class="f">Line or machine
-            <input type="text" id="sLine" placeholder="e.g. Flexo Folder Gluer 1">
-          </label>
-          <label class="f">Job / product
-            <input type="text" id="sJob" placeholder="e.g. RSC 12x10x8, 2-color, customer ABC">
-          </label>
-          <div>
-            <div style="font-weight:600;margin-bottom:6px">What to check</div>
-            <div class="checks" id="sChecks"></div>
+      <div class="setup-wrap">
+        <div class="setup-intro">
+          <h2 class="cond">Set up this camera</h2>
+          <p>Work through the steps in order. A step turns green when it's done. When you change jobs later, only steps 2, 5 and 6 need updating.</p>
+        </div>
+
+        <div class="step" id="st1">
+          <div class="step-h"><div class="num"><span>1</span></div><div><h3>Connect</h3><div class="sub">Enter the plant access code. Each computer needs it once.</div></div></div>
+          <div class="row">
+            <input type="text" id="sCode" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Access code" style="max-width:260px">
+            <span class="small" id="st1Status"></span>
           </div>
-          <label class="f">Job-specific notes for the inspector
-            <span class="hint">Anything a new operator would need to know: logo color, text that must appear, which panel faces up.</span>
+        </div>
+
+        <div class="step" id="st2">
+          <div class="step-h"><div class="num"><span>2</span></div><div><h3>Machine and job</h3><div class="sub">Shows on every alarm and in the log.</div></div></div>
+          <div class="two">
+            <label class="f">Machine
+              <input type="text" id="sLine" placeholder="e.g. Flexo Folder Gluer 1">
+            </label>
+            <label class="f">Job / product
+              <input type="text" id="sJob" placeholder="e.g. RSC 12x10x8, 2-color, customer ABC">
+            </label>
+          </div>
+        </div>
+
+        <div class="step" id="st3">
+          <div class="step-h"><div class="num"><span>3</span></div><div><h3>Camera</h3><div class="sub">Pick the USB camera, start it, and aim it so a whole product fits in the picture.</div></div></div>
+          <ol class="steps small" style="margin:0">
+            <li>Choose the camera from the list, then click <b>Start camera</b>. Click <b>Allow</b> if the browser asks.</li>
+            <li>Mount it 2–4 ft above the belt, pointing straight down, with steady light and no glare.</li>
+          </ol>
+          <div id="setupCamSlot"></div>
+        </div>
+
+        <div class="step" id="st4">
+          <div class="step-h"><div class="num"><span>4</span></div><div><h3>Trigger zone and empty belt</h3><div class="sub">Tells the camera when a product has arrived.</div></div></div>
+          <ol class="steps small" style="margin:0">
+            <li>Click <b>Set trigger zone</b> and drag a box across the belt where each product fully shows.</li>
+            <li>With nothing in the yellow box, click <b>Learn empty belt</b>.</li>
+          </ol>
+          <p class="small muted" style="margin:0">Use the camera picture in step 3 for both.</p>
+        </div>
+
+        <div class="step" id="st5">
+          <div class="step-h"><div class="num"><span>5</span></div><div><h3>What to check</h3><div class="sub">The AI only looks for what's ticked here.</div></div></div>
+          <div class="checks" id="sChecks"></div>
+          <label class="f">Job notes for the inspector <span class="hint">Optional. Anything a new operator would need to know: logo color, text that must appear, which panel faces up.</span>
             <textarea id="sNotes" placeholder="e.g. Logo is red on the long panels. 'FRAGILE' must print on both end panels."></textarea>
           </label>
-          <div>
-            <div style="font-weight:600;margin-bottom:6px">Good sample (approved box)</div>
-            <div class="ref">
-              <div class="ph" id="refPh">No sample yet</div>
-              <div class="grid" style="display:grid;gap:8px">
-                <span class="small muted">A photo of an approved box, taken from this same camera position. The AI compares every product against it.</span>
-                <div class="row">
-                  <button class="btn sm primary" id="refFromCam">Use current camera view</button>
-                  <label class="btn sm" for="refInput" style="display:inline-grid;place-items:center">Upload photo</label>
-                  <input id="refInput" type="file" accept="image/*" class="sr">
-                  <button class="btn sm" id="refClear">Remove</button>
-                </div>
+        </div>
+
+        <div class="step" id="st6">
+          <div class="step-h"><div class="num"><span>6</span></div><div><h3>Good sample</h3><div class="sub">A photo of an approved product. The AI compares every product against it. Retake it on every job change.</div></div></div>
+          <div class="ref">
+            <div class="ph" id="refPh">No sample yet</div>
+            <div style="display:grid;gap:8px">
+              <span class="small muted">Put an approved product in the yellow zone, then take the photo.</span>
+              <div class="row">
+                <button class="btn sm primary" id="refFromCam" type="button">Take good sample now</button>
+                <label class="btn sm" for="refInput" style="display:inline-grid;place-items:center">Upload photo</label>
+                <input id="refInput" type="file" accept="image/*" class="sr">
+                <button class="btn sm" id="refClear" type="button">Remove</button>
               </div>
             </div>
           </div>
         </div>
 
-        <div>
-          <div class="panel form">
-            <h2>Triggering and alerts</h2>
-            <label class="toggle"><input type="checkbox" id="sAuto"> Start camera and inspecting automatically when this page opens</label>
-            <span class="small muted" style="margin-top:-8px">Use this on the machine PC so inspection restarts by itself after a reboot.</span>
+        <div class="step" id="st7">
+          <div class="step-h"><div class="num"><span>7</span></div><div><h3>Inspection settings</h3><div class="sub">The defaults work for most lines. Adjust after a test run.</div></div></div>
+          <div class="two">
             <label class="f">Inspection speed
               <select id="sTier">
-                <option value="quick">Fast (about 1–3 s per product)</option>
+                <option value="fast">Fast (about 1–3 s per product)</option>
                 <option value="thorough">Thorough (about 5–15 s per product)</option>
               </select>
             </label>
             <label class="f">Inspect every
-              <span class="hint">1 = every product. On fast lines use a higher number so the AI can keep up.</span>
               <select id="sEveryN">
                 <option value="1">Every product</option><option value="2">Every 2nd product</option>
                 <option value="5">Every 5th product</option><option value="10">Every 10th product</option>
                 <option value="25">Every 25th product</option><option value="50">Every 50th product</option>
               </select>
+              <span class="hint">On fast lines, use a higher number so the AI can keep up.</span>
             </label>
             <label class="f">Trigger sensitivity <span class="hint" id="sensVal"></span>
               <input type="range" id="sSens" min="1" max="10" step="1">
+              <span class="hint">Raise it if products are missed; lower it if one product triggers twice.</span>
             </label>
             <label class="f">Photo delay after product enters <span class="hint" id="settleVal"></span>
               <input type="range" id="sSettle" min="0" max="1500" step="50">
+              <span class="hint">Raise it if products are cut off at the edge of the photo.</span>
             </label>
-            <label class="toggle"><input type="checkbox" id="sSound"> Alarm sound on failures</label>
-            <label class="toggle"><input type="checkbox" id="sVib"> Vibrate on failures</label>
-            <label class="toggle"><input type="checkbox" id="sCheckAlarm"> Also alarm on "Check" results</label>
-            <div class="row">
-              <button class="btn sm" id="btnTestAlarm" type="button">Send a test alarm</button>
-              <span class="small muted">Sounds the alarm here and on every supervisor phone with alarms on.</span>
-            </div>
           </div>
-          <div class="panel">
-            <h2>Mounting checklist</h2>
-            <ol class="steps small">
-              <li>Mount the USB camera 2–4 ft above the belt, lens pointing straight down, and run the cable to the machine PC.</li>
-              <li>Add steady lighting over the belt. Avoid glare from shop lights on glossy print.</li>
-              <li>Start the camera and draw the yellow trigger zone across the belt where each product fully shows.</li>
-              <li>With the belt empty, tap Learn empty belt.</li>
-              <li>Take the good-sample photo from this same position.</li>
-              <li>Run 10–20 products and check that each one triggers exactly once. Adjust sensitivity and photo delay if needed.</li>
-            </ol>
+          <label class="toggle"><input type="checkbox" id="sAuto"> Start camera and inspecting automatically when this page opens (recommended on the machine PC)</label>
+        </div>
+
+        <div class="step" id="st8">
+          <div class="step-h"><div class="num"><span>8</span></div><div><h3>Alarm</h3><div class="sub">Make sure the operator can hear it over the machine.</div></div></div>
+          <label class="toggle"><input type="checkbox" id="sSound"> Alarm sound on failures</label>
+          <label class="toggle"><input type="checkbox" id="sCheckAlarm"> Also alarm on "Check" results</label>
+          <input type="checkbox" id="sVib" hidden>
+          <div class="row">
+            <button class="btn sm" id="btnTestAlarm" type="button">Send a test alarm</button>
+            <span class="small muted">Sounds here and on every supervisor phone with alarms on.</span>
           </div>
+        </div>
+
+        <div class="finish">
+          <p id="finishMsg">Finish the steps above, then start inspecting.</p>
+          <button class="btn primary big" id="btnFinish" type="button">Finish setup — go to Inspect</button>
         </div>
       </div>
     </section>
@@ -357,8 +410,8 @@ nav.tabs .badge.show{display:grid}
   </main>
 
   <nav class="tabs" role="tablist">
-    <button role="tab" aria-selected="true" data-v="inspect"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Inspect</button>
     <button role="tab" aria-selected="false" data-v="setup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Setup</button>
+    <button role="tab" aria-selected="true" data-v="inspect"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Inspect</button>
     <button role="tab" aria-selected="false" data-v="log"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h7M9 7h3"/></svg>Log</button>
     <button role="tab" aria-selected="false" data-v="alerts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>Alerts<span class="badge" id="alertBadge">0</span></button>
   </nav>
@@ -446,12 +499,19 @@ aiPill.addEventListener("click", () => {
 });
 function showSupOff(on){ $("#supOff").hidden = !on; }
 /* ---------- Tabs ---------- */
-document.querySelectorAll("nav.tabs button").forEach(b => b.addEventListener("click", () => {
-  document.querySelectorAll("nav.tabs button").forEach(x => x.setAttribute("aria-selected", x === b));
-  document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.id === "v-" + b.dataset.v));
-  if (b.dataset.v === "alerts") { unseenAlerts = 0; updateBadge(); }
+function showTab(name){
+  document.querySelectorAll("nav.tabs button").forEach(x => x.setAttribute("aria-selected", x.dataset.v === name));
+  document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.id === "v-" + name));
+  if (name === "alerts") { unseenAlerts = 0; updateBadge(); }
+  // the one live camera picture moves to whichever tab needs it
+  const slot = name === "setup" ? $("#setupCamSlot") : $("#inspectCamSlot");
+  const block = $("#camBlock");
+  if (block.parentElement !== slot) { slot.append(block); if (camOn) video.play().catch(() => {}); }
+  if (name === "setup" && zoning === false) refreshSteps();
   window.scrollTo(0, 0);
-}));
+}
+document.querySelectorAll("nav.tabs button").forEach(b => b.addEventListener("click", () => showTab(b.dataset.v)));
+document.addEventListener("click", e => { const g = e.target.closest("[data-goto]"); if (g) showTab(g.dataset.goto); });
 
 /* ---------- Setup form ---------- */
 function bindSetup(){
@@ -465,6 +525,8 @@ function bindSetup(){
   const txt = (id, key, after) => { const i = $(id); i.value = S[key]; i.addEventListener("input", () => { S[key] = i.value; save(); after && after(); }); };
   txt("#sLine", "line", updateHeader); txt("#sJob", "job", updateHeader); txt("#sNotes", "notes");
   const sel = (id, key, num) => { const i = $(id); i.value = String(S[key]); i.addEventListener("change", () => { S[key] = num ? Number(i.value) : i.value; save(); }); };
+  if (!["fast","thorough"].includes(S.tier)) S.tier = "fast";
+  if (!["fast","thorough"].includes(S.tier)) S.tier = "fast";
   sel("#sTier", "tier"); sel("#sEveryN", "everyN", true);
   const rng = (id, key, out, fmt) => { const i = $(id); i.value = S[key]; const upd = () => { $(out).textContent = fmt(S[key]); };
     i.addEventListener("input", () => { S[key] = Number(i.value); save(); upd(); }); upd(); };
@@ -483,8 +545,8 @@ function renderRef(){
   $("#refClear").disabled = !refDataUrl;
 }
 $("#refFromCam").addEventListener("click", () => {
-  if (!camOn) { toast("Start the camera on the Inspect tab first."); return; }
-  refDataUrl = grab(900, .8).toDataURL("image/jpeg", .8); store.set("qc.ref", refDataUrl); renderRef(); toast("Good sample saved.");
+  if (!camOn) { toast("Start the camera in step 3 first."); return; }
+  refDataUrl = grab(900, .8).toDataURL("image/jpeg", .8); store.set("qc.ref", refDataUrl); renderRef(); toast("Good sample saved."); refreshSteps();
 });
 $("#refInput").addEventListener("change", async e => {
   const f = e.target.files[0]; if (!f) return;
@@ -870,13 +932,45 @@ $("#btnTestAlarm").addEventListener("click", () => {
   showAlarm(entry); pushEvent(entry);
 });
 
+/* ---------- Setup steps ---------- */
+function stepState(){
+  return {
+    st1: aiOk,
+    st2: !!S.line.trim() && !!S.job.trim(),
+    st3: camOn,
+    st4: !!bg,
+    st5: S.checks.length > 0,
+    st6: !!refDataUrl,
+    st7: true, st8: true
+  };
+}
+function refreshSteps(){
+  const st = stepState();
+  Object.entries(st).forEach(([id, ok]) => $("#" + id).classList.toggle("done", ok && !["st7","st8"].includes(id)));
+  $("#st1Status").textContent = aiOk ? "Connected" : aiPill.textContent;
+  $("#st1Status").style.color = aiOk ? "var(--pass)" : "var(--muted)";
+  const missing = [["st1","Connect"],["st2","Machine and job"],["st3","Camera"],["st4","Trigger zone and empty belt"],["st5","What to check"],["st6","Good sample"]].filter(([k]) => !st[k]).map(([, n]) => n);
+  $("#finishMsg").textContent = missing.length ? "Still to do: " + missing.join(", ") + "." : "All set. Go to Inspect and start inspecting.";
+  $("#needSetup").hidden = !!S.setupDone;
+}
+setInterval(() => { if ($("#v-setup").classList.contains("on")) refreshSteps(); }, 1000);
+$("#btnFinish").addEventListener("click", () => {
+  const st = stepState();
+  if (!st.st1 || !st.st3 || !st.st4) {
+    if (!confirm("Some steps aren't finished yet, so inspections may not work well. Go to Inspect anyway?")) return;
+  }
+  S.setupDone = true; save(); refreshSteps(); showTab("inspect");
+  if (camOn && !isArmed) toast("Click Start inspecting when the line is running.");
+});
+
 /* ---------- Boot ---------- */
 bindSetup(); renderCounts(); renderLog(); setChip("Idle", "");
-if (S.autoStart && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+showTab(S.setupDone ? "inspect" : "setup"); refreshSteps();
+if (S.setupDone && S.autoStart && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
   setTimeout(async () => { await startCamera(); if (camOn) setTimeout(() => setArmed(true), 1500); }, 800);
 } else listCameras();
 checkAi(); pollEvents();
-if (!accessCode) setTimeout(() => toast("Tap the AI status at the top right to enter the plant access code."), 600);
+
 if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) $("#photoFallback").hidden = false;
 })();
 </script>

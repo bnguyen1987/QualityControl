@@ -34,10 +34,10 @@ Re-run the deploy command after any code change. Env var changes need a redeploy
    (It opens Line QC in its own Chrome window that keeps working when Encore is in front.)
 3. Click "Allow" when Chrome asks to use the camera.
 4. Click the AI status (top right) and enter the access code.
-5. Inspect tab: pick the USB camera from the camera list, click Start camera,
-   draw the trigger zone, and click Learn empty belt with the belt clear.
-6. Setup tab: fill in the machine and job, take the good sample, and tick
-   "Start camera and inspecting automatically when this page opens".
+5. The site opens on the Setup page the first time. Work through steps 1–8:
+   access code, machine and job, camera, trigger zone, checks, good sample,
+   settings (tick auto-start) and alarm. Then click "Finish setup — go to Inspect".
+   After that, the PC opens straight to Inspect.
 7. To start automatically after a reboot: Windows+R, type shell:startup, Enter,
    and copy the .bat file into that folder.
 8. Windows power settings: set Sleep to "Never" for this PC.
