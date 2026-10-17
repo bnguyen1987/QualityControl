@@ -331,6 +331,9 @@ dialog.big .body{padding:14px;display:grid;gap:6px}
             <label class="f">Order #
               <input type="text" id="sOrder" inputmode="numeric" placeholder="e.g. 123456">
             </label>
+            <label class="f">Quantity
+              <input type="text" id="sQty" inputmode="numeric" placeholder="e.g. 10000">
+            </label>
           </div>
         </div>
 
@@ -535,7 +538,7 @@ const CHECKS = [
   {id:"bundle", label:"Bundle & strapping",           hint:"Straps present, bundle square and even"},
   {id:"tag",    label:"Load tag",                     hint:"Tag present and readable"}
 ];
-const DEFAULTS = {line:"", job:"", customer:"", order:"", checks:["print","ink","score","die","joint","damage"], notes:"",
+const DEFAULTS = {line:"", job:"", customer:"", order:"", qty:"", checks:["print","ink","score","die","joint","damage"], notes:"",
   autoStart:false, camId:"", tier:"fast", everyN:1, sens:6, settle:250, sound:true, vibrate:true, checkAlarm:false,
   zone:{x:.25, y:.08, w:.5, h:.84}};
 const S = Object.assign({}, DEFAULTS, store.get("qc.settings", {}));
@@ -605,7 +608,7 @@ function bindSetup(){
   // Customer + order make up the job label used on alarms, alerts and the log
   if (S.customer === "" && S.order === "" && S.job) S.customer = S.job; // carry over an older job entry
   const setJob = () => { S.job = [S.customer.trim(), S.order.trim() ? "Order #" + S.order.trim() : ""].filter(Boolean).join(" — "); save(); updateHeader(); };
-  txt("#sCust", "customer", setJob); txt("#sOrder", "order", setJob); setJob();
+  txt("#sCust", "customer", setJob); txt("#sOrder", "order", setJob); txt("#sQty", "qty"); setJob();
   // Machine list: edit MACHINES to add or rename machines
   const ms = $("#sMachine"), other = $("#sLine");
   ms.append(el("option", {value:"", text:"Choose a machine…"}));
@@ -851,7 +854,7 @@ function setChip(t, cls){ const c = $("#chipState"); c.textContent = t; c.classN
 /* ---------- AI inspection (prompt is built on the server) ---------- */
 async function runInspection(canvas, source){
   busy = true; setChip("Inspecting…", "busy");
-  const entry = {id:Date.now().toString(36) + Math.random().toString(36).slice(2, 5), ts:Date.now(), line:S.line, job:S.job, customer:S.customer, order:S.order, source,
+  const entry = {id:Date.now().toString(36) + Math.random().toString(36).slice(2, 5), ts:Date.now(), line:S.line, job:S.job, customer:S.customer, order:S.order, qty:S.qty, source,
     thumb:thumbOf(canvas), verdict:"PENDING", summary:"Inspecting…", defects:[], confidence:null};
   renderLast(entry);
   try {
@@ -929,9 +932,9 @@ $("#logFilter").addEventListener("change", renderLog);
 $("#btnClear").addEventListener("click", () => { if (!confirm("Clear the inspection log on this device?")) return; log = []; store.set("qc.log", log); renderLog(); });
 $("#btnExport").addEventListener("click", async () => {
   const q = v => '"' + String(v ?? "").replace(/"/g, '""') + '"';
-  const lines = [["Date","Time","Machine","Customer","Order #","Result","Summary","Defects","Confidence","Trigger"].join(",")];
+  const lines = [["Date","Time","Machine","Customer","Order #","Quantity","Result","Summary","Defects","Confidence","Trigger"].join(",")];
   log.slice().reverse().forEach(e => { const d = new Date(e.ts);
-    lines.push([d.toLocaleDateString(), d.toLocaleTimeString(), e.line, e.customer ?? e.job, e.order ?? "", e.verdict, e.summary,
+    lines.push([d.toLocaleDateString(), d.toLocaleTimeString(), e.line, e.customer ?? e.job, e.order ?? "", e.qty ?? "", e.verdict, e.summary,
       e.defects.map(x => `${x.check}: ${x.issue} (${x.severity})`).join("; "), e.confidence ?? "", e.source].map(q).join(",")); });
   const url = URL.createObjectURL(new Blob([lines.join("\n")], {type:"text/csv"}));
   const a = el("a", {href:url, download:`qc-log-${new Date().toISOString().slice(0,10)}.csv`}); document.body.append(a); a.click(); a.remove();
@@ -1087,7 +1090,7 @@ async function savePhoto(canvas, kind, info){
   // keep files a sensible size: up to 1280 px wide
   let c = canvas;
   if (c.width > 1280) { const t = document.createElement("canvas"); t.width = 1280; t.height = Math.round(c.height * 1280 / c.width); t.getContext("2d").drawImage(c, 0, 0, t.width, t.height); c = t; }
-  const body = {order:S.order.trim(), customer:S.customer || "", machine:S.line || "", kind, ts:info.ts || Date.now(),
+  const body = {order:S.order.trim(), qty:(S.qty || "").trim(), customer:S.customer || "", machine:S.line || "", kind, ts:info.ts || Date.now(),
     verdict:info.verdict || "", summary:info.summary || "", summary_es:info.summary_es || "",
     defects:(info.defects || []).map(d => `${d.check}: ${d.issue} (${d.severity})`).join("; "), image:c.toDataURL("image/jpeg", .82)};
   for (let attempt = 0; attempt < 3; attempt++) {

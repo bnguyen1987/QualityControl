@@ -78,7 +78,7 @@ export default async (req: Request, context: Context) => {
     const imgKey = `img/${order}/${id}.jpg`;
     await s.set(imgKey, bytes.buffer);
     const meta = {
-      id, img: imgKey, ts, order: str(b.order, 40).trim(), customer: str(b.customer, 120), machine: str(b.machine, 80),
+      id, img: imgKey, ts, order: str(b.order, 40).trim(), qty: str(b.qty, 20), customer: str(b.customer, 120), machine: str(b.machine, 80),
       kind: KINDS.includes(b.kind) ? b.kind : "manual", verdict: str(b.verdict, 12),
       summary: str(b.summary, 300), summary_es: str(b.summary_es, 300), defects: str(b.defects, 1500),
     };

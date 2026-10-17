@@ -56,7 +56,7 @@
     "Machine and job": "Máquina y trabajo", "Shows on every alarm and in the log.": "Aparece en cada alarma y en el registro.",
     "Machine": "Máquina", "Choose a machine…": "Elija una máquina…", "Other (type it in)": "Otra (escríbala)",
     "Type the machine name": "Escriba el nombre de la máquina",
-    "Customer name": "Nombre del cliente", "e.g. ABC Produce": "ej. ABC Produce", "Order #": "Orden #", "e.g. 123456": "ej. 123456",
+    "Customer name": "Nombre del cliente", "e.g. ABC Produce": "ej. ABC Produce", "Order #": "Orden #", "e.g. 123456": "ej. 123456", "Quantity": "Cantidad", "e.g. 10000": "ej. 10000",
     "Camera": "Cámara",
     "Pick the USB camera, start it, and aim it so a whole product fits in the picture.": "Elija la cámara USB, enciéndala y apúntela para que el producto completo quepa en la imagen.",
     "Choose the camera from the list, then click": "Elija la cámara de la lista y haga clic en",
