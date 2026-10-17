@@ -294,7 +294,7 @@ dialog.big .body{padding:14px;display:grid;gap:6px}
           <div class="notice bad" id="camErr" hidden></div>
           <div class="notice" id="bgTip" hidden><span id="trigStatus"></span></div>
           <div class="notice go-setup bad" id="sampleStale" hidden>
-            <span>The good sample is from a different order, so it isn't being used. Retake it for this order.</span>
+            <span>The good sample needs to be retaken (new order, zone or camera), so it isn't being used.</span>
             <button class="btn sm primary" type="button" data-goto="setup">Go to Setup</button>
           </div>
           <div class="notice" id="photoFallback" hidden>
@@ -390,7 +390,7 @@ dialog.big .body{padding:14px;display:grid;gap:6px}
             <div class="ph" id="refPh">No sample yet</div>
             <div style="display:grid;gap:8px">
               <span class="small muted">Put an approved product in the yellow zone, then take the photo.</span>
-              <span class="small" id="refStale" hidden style="color:var(--fail);font-weight:600">This sample is from a different order. Retake it for this order.</span>
+              <span class="small" id="refStale" hidden style="color:var(--fail);font-weight:600">Retake the good sample: the order, trigger zone or camera changed since it was taken.</span>
               <div class="row">
                 <button class="btn sm primary" id="refFromCam" type="button">Take good sample now</button>
                 <label class="btn sm" for="refInput" style="display:inline-grid;place-items:center">Upload photo</label>
@@ -582,7 +582,7 @@ const S = Object.assign({}, DEFAULTS, store.get("qc.settings", {}));
 const save = () => store.set("qc.settings", S);
 let refDataUrl = store.get("qc.ref", null), refOrder = store.get("qc.refOrder", null);
 // the good sample only counts for the order it was taken on
-const refValid = () => !!refDataUrl && (refOrder == null || refOrder === S.order.trim());
+const refValid = () => !!refDataUrl && store.get("qc.refCrop", false) && (refOrder == null || refOrder === S.order.trim());
 const deviceId = store.get("qc.device", null) || (() => { const id = Math.random().toString(36).slice(2, 10); store.set("qc.device", id); return id; })();
 
 /* ---------- Site API ---------- */
@@ -692,12 +692,12 @@ function renderRef(){
 }
 $("#refFromCam").addEventListener("click", () => {
   if (!camOn) { toast("Start the camera in step 3 first."); return; }
-  refDataUrl = grab(900, .8).toDataURL("image/jpeg", .8); setRefOrder(); store.set("qc.ref", refDataUrl); renderRef(); toast("Good sample saved."); refreshSteps();
-  savePhoto(grab(1280), "sample", {verdict:"SAMPLE", summary:"Good sample (approved product)", summary_es:"Muestra buena (producto aprobado)"});
+  refDataUrl = grabZone(1024).toDataURL("image/jpeg", .82); setRefOrder(); store.set("qc.refCrop", true); store.set("qc.ref", refDataUrl); renderRef(); toast("Good sample saved."); refreshSteps();
+  savePhoto(grabZone(1280), "sample", {verdict:"SAMPLE", summary:"Good sample (approved product)", summary_es:"Muestra buena (producto aprobado)"});
 });
 $("#refInput").addEventListener("change", async e => {
   const f = e.target.files[0]; if (!f) return;
-  const c = await fileToCanvas(f, 1280); refDataUrl = c.toDataURL("image/jpeg", .8); setRefOrder(); store.set("qc.ref", refDataUrl); renderRef(); refreshSteps(); e.target.value = "";
+  const c = await fileToCanvas(f, 1280); refDataUrl = c.toDataURL("image/jpeg", .8); setRefOrder(); store.set("qc.refCrop", true); store.set("qc.ref", refDataUrl); renderRef(); refreshSteps(); e.target.value = "";
   savePhoto(c, "sample", {verdict:"SAMPLE", summary:"Good sample (approved product)", summary_es:"Muestra buena (producto aprobado)"});
 });
 $("#refClear").addEventListener("click", () => { refDataUrl = null; store.set("qc.ref", null); renderRef(); refreshSteps(); });
@@ -771,7 +771,7 @@ async function listCameras(){
   } catch {}
 }
 $("#camSel").addEventListener("change", async e => {
-  S.camId = e.target.value; save(); resetTrigger();
+  S.camId = e.target.value; save(); resetTrigger(); store.set("qc.refCrop", false); renderRef();
   if (camOn) { const armed = isArmed; stopCamera(); await startCamera(); if (armed && camOn) setArmed(true); }
   toast("Camera changed. Keep the yellow box clear for a few seconds while it relearns the belt.");
 });
@@ -804,6 +804,18 @@ function grab(maxW, q){
   const w = video.videoWidth, h = video.videoHeight, s = Math.min(1, maxW / w);
   const c = document.createElement("canvas"); c.width = Math.round(w * s); c.height = Math.round(h * s);
   c.getContext("2d").drawImage(video, 0, 0, c.width, c.height); return c;
+}
+// Close-up of the trigger zone (plus a small margin) at full camera resolution, scaled down to maxW.
+// The AI sees the product instead of belt and background.
+const CROP_MARGIN = 0.06;
+function grabZone(maxW){
+  const W = video.videoWidth, H = video.videoHeight, z = S.zone;
+  const x0 = Math.max(0, z.x - CROP_MARGIN), y0 = Math.max(0, z.y - CROP_MARGIN);
+  const x1 = Math.min(1, z.x + z.w + CROP_MARGIN), y1 = Math.min(1, z.y + z.h + CROP_MARGIN);
+  const sx = Math.round(x0 * W), sy = Math.round(y0 * H), sw = Math.max(16, Math.round((x1 - x0) * W)), sh = Math.max(16, Math.round((y1 - y0) * H));
+  const s = Math.min(1, maxW / sw);
+  const c = document.createElement("canvas"); c.width = Math.round(sw * s); c.height = Math.round(sh * s);
+  c.getContext("2d").drawImage(video, sx, sy, sw, sh, 0, 0, c.width, c.height); return c;
 }
 function fileToCanvas(file, maxW){
   return new Promise((res, rej) => {
@@ -842,7 +854,7 @@ overlay.addEventListener("pointermove", e => { if (!zoning || !dragStart) return
   S.zone = {x:Math.min(p.x, dragStart.x), y:Math.min(p.y, dragStart.y), w:Math.abs(p.x - dragStart.x), h:Math.abs(p.y - dragStart.y)}; drawOverlay(); });
 overlay.addEventListener("pointerup", () => { if (!zoning || !dragStart) return; dragStart = null;
   if (S.zone.w < .05 || S.zone.h < .05) S.zone = {...DEFAULTS.zone};
-  save(); setZoning(false); resetTrigger(); beginLearn(); toast("Zone saved. Keep it clear for a few seconds while it learns the empty belt."); });
+  save(); setZoning(false); resetTrigger(); beginLearn(); store.set("qc.refCrop", false); renderRef(); refreshSteps(); toast("Zone saved. Keep it clear for a few seconds while it learns the empty belt."); });
 function setZoning(on){ zoning = on; stage.classList.toggle("zoning", on); $("#chipZone").hidden = !on; $("#btnZone").classList.toggle("on", on); drawOverlay(); }
 $("#btnZone").addEventListener("click", () => setZoning(!zoning));
 
@@ -972,7 +984,7 @@ function onProduct(){
   state = "WAIT_CLEAR"; stateSince = Date.now(); clearN = 0; counts.seen++; zoneFlash = 4; drawOverlay();
   if (counts.seen % S.everyN !== 0) { renderCounts(); return; }
   if (busy) { counts.notInspected++; renderCounts(); return; }
-  const c = grab(1280); runInspection(c, "auto");
+  const c = grabZone(1280); runInspection(c, "auto");
 }
 function setArmed(on){
   isArmed = on; clearTimeout(settleTimer); state = "EMPTY"; presentN = clearN = 0;
@@ -984,7 +996,7 @@ $("#btnArm").addEventListener("click", () => {
   else if (!isArmed && !aiOk) toast("AI isn't ready (" + aiPill.textContent + "). Products will be counted but not inspected.");
   setArmed(!isArmed);
 });
-$("#btnNow").addEventListener("click", () => { if (!camOn) return; if (busy) { toast("Still inspecting the last product."); return; } runInspection(grab(1280), "manual"); });
+$("#btnNow").addEventListener("click", () => { if (!camOn) return; if (busy) { toast("Still inspecting the last product."); return; } runInspection(grabZone(1280), "manual"); });
 $("#snapInput").addEventListener("change", async e => { const f = e.target.files[0]; if (!f) return; ensureAudio();
   const c = await fileToCanvas(f, 1280); e.target.value = ""; if (busy) { toast("Still inspecting the last product."); return; } runInspection(c, "photo"); });
 function setChip(t, cls){ const c = $("#chipState"); c.textContent = t; c.className = "chip " + (cls || ""); }
@@ -994,6 +1006,7 @@ async function runInspection(canvas, source){
   busy = true; setChip("Inspecting…", "busy");
   const entry = {id:Date.now().toString(36) + Math.random().toString(36).slice(2, 5), ts:Date.now(), line:S.line, job:S.job, customer:S.customer, order:S.order, qty:S.qty, source,
     thumb:thumbOf(canvas), verdict:"PENDING", summary:"Inspecting…", defects:[], confidence:null};
+  rememberShot(entry, canvas);
   renderLast(entry);
   try {
     if (aiNoKey) { entry.verdict = "CAPTURED"; entry.summary = "Photo captured (test mode, AI not connected yet)."; return; }
@@ -1001,7 +1014,8 @@ async function runInspection(canvas, source){
     if (!aiOk) { entry.verdict = "ERROR"; entry.summary = "AI isn't ready: " + aiPill.textContent + "."; return; }
     const b64 = c => c.toDataURL("image/jpeg", .85).split(",")[1];
     const payload = {image:b64(canvas), reference: refValid() ? refDataUrl.split(",")[1] : "", tier:S.tier === "thorough" ? "thorough" : "fast",
-      settings:{line:S.line, job:S.customer, checks:S.checks, notes:S.notes}};
+      settings:{line:S.line, job:S.customer, checks:S.checks, notes:S.notes},
+      okExamples:okExamplesFor(S.order).map(x => ({image:x.img.split(",")[1], note:x.note}))};
     const {result:r} = await api("/api/inspect", {method:"POST", body:JSON.stringify(payload)});
     const v = String(r && r.verdict || "").toUpperCase();
     entry.verdict = ["PASS","CHECK","FAIL","UNCLEAR"].includes(v) ? v : "CHECK";
@@ -1076,6 +1090,7 @@ function setFeedback(entry, fb){
   const field = {confirmed:"confirmed", false:"falseAlarm"};
   if (entry.fb) bump(entry.ts, field[entry.fb], -1);
   entry.fb = fb; bump(entry.ts, field[fb], 1);
+  if (fb === "false") saveOkExample(entry); else dropOkExample(entry);
   const i = log.findIndex(e => e.id === entry.id); if (i >= 0) log[i] = entry;
   store.set("qc.log", log); renderLog(); if (log[0] && log[0].id === entry.id) renderLast(entry);
 }
@@ -1102,13 +1117,41 @@ $("#statRange").addEventListener("change", renderStats);
 $("#btnMissed").addEventListener("click", () => {
   if (!confirm("Record that the AI passed a product that was actually bad?")) return;
   let thumb = "";
-  if (camOn && video.videoWidth) thumb = thumbOf(grab(640));
+  if (camOn && video.videoWidth) thumb = thumbOf(grabZone(640));
   const entry = {id:Date.now().toString(36) + "m", ts:Date.now(), line:S.line, job:S.job, customer:S.customer, order:S.order, qty:S.qty,
     source:"operator", thumb, verdict:"MISSED", summary:"Operator found a defect the AI passed.", summary_es:"El operador encontró un defecto que la IA pasó.", defects:[], confidence:null};
   log.unshift(entry); if (log.length > 150) log.length = 150; store.set("qc.log", log); renderLog();
   bump(entry.ts, "missed");
   toast("Missed defect recorded. Thank you.");
 });
+
+/* ---------- Learning from false alarms ---------- */
+// Keep the last few inspection photos in memory so a "False alarm" answer can save the photo.
+// Saved photos become "OK examples" for that order: the AI sees them next to each new product
+// and learns not to flag the same thing again.
+const recentShots = new Map();           // entry id -> small JPEG
+const OK_PER_ORDER = 2;
+let okEx = store.get("qc.okEx", []);     // [{id, order, machine, img, note, ts}]
+function rememberShot(entry, canvas){
+  const s = Math.min(1, 640 / canvas.width), t = document.createElement("canvas");
+  t.width = Math.round(canvas.width * s); t.height = Math.round(canvas.height * s);
+  t.getContext("2d").drawImage(canvas, 0, 0, t.width, t.height);
+  recentShots.set(entry.id, t.toDataURL("image/jpeg", .75));
+  while (recentShots.size > 25) recentShots.delete(recentShots.keys().next().value);
+}
+function saveOkExample(entry){
+  const img = recentShots.get(entry.id); const order = (entry.order || "").trim();
+  if (!img || !order) return;
+  okEx = okEx.filter(x => x.id !== entry.id);
+  okEx.push({id:entry.id, order, machine:entry.line || "", img, note:entry.summary || "", ts:Date.now()});
+  // newest few per order, and a small total so it fits in the browser's storage
+  const mine = okEx.filter(x => x.order === order);
+  if (mine.length > OK_PER_ORDER) { const drop = new Set(mine.slice(0, mine.length - OK_PER_ORDER).map(x => x.id)); okEx = okEx.filter(x => !drop.has(x.id)); }
+  okEx = okEx.slice(-20);
+  store.set("qc.okEx", okEx);
+}
+function dropOkExample(entry){ okEx = okEx.filter(x => x.id !== entry.id); store.set("qc.okEx", okEx); }
+const okExamplesFor = order => okEx.filter(x => x.order === (order || "").trim()).slice(-OK_PER_ORDER);
 
 /* ---------- Log ---------- */
 let log = store.get("qc.log", []);
@@ -1230,7 +1273,7 @@ function toast(msg){ const t = $("#toast"); t.textContent = msg; t.classList.add
 $("#btnTestAlarm").addEventListener("click", () => {
   ensureAudio();
   let c;
-  if (camOn) c = grab(640);
+  if (camOn) c = grabZone(640);
   else { c = document.createElement("canvas"); c.width = 320; c.height = 180; const x = c.getContext("2d");
     x.fillStyle = "#00694b"; x.fillRect(0, 0, 320, 180); x.fillStyle = "#fff"; x.font = "bold 40px 'Segoe UI', sans-serif"; x.textAlign = "center"; x.fillText("TEST", 160, 105); }
   const entry = {test:true, ts:Date.now(), line:S.line, job:S.job, verdict:"FAIL", thumb:thumbOf(c),

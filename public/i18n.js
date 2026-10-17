@@ -139,8 +139,8 @@
     "Zone saved. Keep it clear for a few seconds while it learns the empty belt.": "Zona guardada. Manténgala despejada unos segundos mientras aprende la banda vacía.",
     "Camera changed. Keep the yellow box clear for a few seconds while it relearns the belt.": "Cámara cambiada. Mantenga despejado el recuadro amarillo unos segundos mientras vuelve a aprender la banda.",
 
-    "This sample is from a different order. Retake it for this order.": "Esta muestra es de otra orden. Vuelva a tomarla para esta orden.",
-    "The good sample is from a different order, so it isn't being used. Retake it for this order.": "La muestra buena es de otra orden, así que no se está usando. Vuelva a tomarla para esta orden.",
+    "Retake the good sample: the order, trigger zone or camera changed since it was taken.": "Vuelva a tomar la muestra buena: la orden, la zona de disparo o la cámara cambiaron desde que se tomó.",
+    "The good sample needs to be retaken (new order, zone or camera), so it isn't being used.": "Hay que volver a tomar la muestra buena (orden, zona o cámara nueva), así que no se está usando.",
     "New order: counts reset. Take a new good sample in Setup step 6.": "Orden nueva: conteos reiniciados. Tome una muestra buena nueva en el paso 6 de Configuración.",
     "The AI took too long.": "La IA tardó demasiado.",
 

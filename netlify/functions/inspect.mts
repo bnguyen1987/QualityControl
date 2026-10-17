@@ -23,13 +23,17 @@ function checkAccess(req: Request): Response | null {
   return null;
 }
 
-function buildPrompt(s: { line?: string; job?: string; checks?: string[]; notes?: string }, hasRef: boolean) {
+function buildPrompt(s: { line?: string; job?: string; checks?: string[]; notes?: string }, hasRef: boolean, okCount: number) {
   const list = (s.checks || []).filter((c) => CHECKS[c]).map((c) => "- " + CHECKS[c]).join("\n") || "- General appearance and damage";
   const clip = (v: unknown, n: number) => String(v ?? "").slice(0, n);
   return `You are the quality inspector on a corrugated box production line. A camera above the conveyor photographed one product.
+The images are labeled in the text just before each one.
 ${hasRef
-    ? "Image 1 is the APPROVED GOOD SAMPLE from the same camera position. Image 2 is the PRODUCT TO INSPECT. Compare the product against the good sample."
-    : "The image is the PRODUCT TO INSPECT. No good sample is available, so judge against normal corrugated box quality."}
+    ? "The APPROVED GOOD SAMPLE was taken from the same camera position. Compare the PRODUCT TO INSPECT against it."
+    : "No good sample is available, so judge the PRODUCT TO INSPECT against normal corrugated box quality."}
+${okCount
+    ? `There ${okCount === 1 ? "is 1 OK EXAMPLE" : `are ${okCount} OK EXAMPLES`}: products from this same order that were flagged before, but an operator checked them and confirmed they are good. Whatever appearance they show (shading, print variation, board texture, position) is acceptable for this job. Do not flag the product for the same thing. Still flag real defects that the OK examples do not show.`
+    : ""}
 Machine: ${clip(s.line, 80) || "not given"}. Customer: ${clip(s.job, 120) || "not given"}.
 Check only these items:
 ${list}
@@ -85,9 +89,14 @@ export default async (req: Request, context: Context) => {
     : Netlify.env.get("QC_MODEL_FAST") || "claude-haiku-4-5-20251001";
 
   const img = (data: string) => ({ type: "image", source: { type: "base64", media_type: "image/jpeg", data } });
+  // up to 2 operator-confirmed "OK examples" for this order (photos the AI wrongly flagged before)
+  const ok = (Array.isArray(body.okExamples) ? body.okExamples : [])
+    .filter((x: any) => x && typeof x.image === "string" && x.image.length < 600_000).slice(0, 2);
   const content: any[] = [];
-  if (ref) content.push({ type: "text", text: "Image 1 (approved good sample):" }, img(ref), { type: "text", text: "Image 2 (product to inspect):" });
-  content.push(img(image), { type: "text", text: buildPrompt(body.settings || {}, !!ref) });
+  if (ref) content.push({ type: "text", text: "APPROVED GOOD SAMPLE:" }, img(ref));
+  ok.forEach((x: any, i: number) => content.push(
+    { type: "text", text: `OK EXAMPLE ${i + 1} (operator confirmed this product is good; it had been flagged for: ${String(x.note || "").slice(0, 200)}):` }, img(x.image)));
+  content.push({ type: "text", text: "PRODUCT TO INSPECT:" }, img(image), { type: "text", text: buildPrompt(body.settings || {}, !!ref, ok.length) });
 
   let res: Response;
   // stop before Netlify's function time limit so the page gets a clear "took too long" answer
