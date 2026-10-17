@@ -124,6 +124,16 @@
     "No failures or checks reported yet.": "No hay fallas ni revisiones reportadas todavía.",
     "Acknowledge": "Enterado", "Acknowledged": "Atendido",
 
+    // Photos
+    "Photos": "Fotos", "Photo archive": "Archivo de fotos",
+    "Photos saved by order number: the good sample, the first product, every Fail and Check, and a Pass photo every 30 minutes.":
+      "Fotos guardadas por número de orden: la muestra buena, el primer producto, cada Falla y Revisar, y una foto de Pasa cada 30 minutos.",
+    "Look up": "Buscar", "Recent orders": "Órdenes recientes", "Loading…": "Cargando…",
+    "Enter the access code in Setup first.": "Primero ingrese el código de acceso en Configuración.",
+    "No photos saved yet.": "Todavía no hay fotos guardadas.", "No photos saved for this order.": "No hay fotos guardadas para esta orden.",
+    "Can't reach the photo archive. Check the internet connection.": "No se puede conectar al archivo de fotos. Revise la conexión a internet.",
+    "First product": "Primer producto", "Photo": "Foto", "Download": "Descargar", "Close": "Cerrar",
+
     // Messages
     "Empty belt learned.": "Banda vacía aprendida.", "Good sample saved.": "Muestra buena guardada.",
     "Start the camera in step 3 first.": "Primero encienda la cámara en el paso 3.",
@@ -159,6 +169,7 @@
     [/^— medium, (\d+)\/10$/, (m, n) => `— media, ${n}/10`],
     [/^\+(\d+) more since this alarm$/, (m, n) => `+${n} más desde esta alarma`],
     [/^(.*) · confidence (\d+)%(.*)$/, (m, a, n, b) => `${a} · confianza ${n}%${b}`],
+    [/^(\d+) photos$/, (m, n) => `${n} fotos`],
     [/^Check: (.*)$/, (m, s) => "Revisar: " + s],
     [/^Camera (\d+)$/, (m, n) => "Cámara " + n],
     [/^This window was hidden for about (\d+) min, so some products may have been missed\. Keep Line QC visible, or start it with the Line QC shortcut\.$/,

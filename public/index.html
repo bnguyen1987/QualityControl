@@ -181,6 +181,24 @@ nav.tabs .badge.show{display:grid}
 .alarm .ack{background:#fff;color:#8E1616;border:0;font-weight:700;font-size:22px;padding:16px 40px;border-radius:10px;min-height:60px}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(24px + env(safe-area-inset-bottom,0px));z-index:40;background:var(--check);color:#1b1300;padding:12px 18px;border-radius:10px;font-weight:600;max-width:min(92vw,520px);box-shadow:0 6px 20px rgba(0,0,0,.25);display:none}
 .toast.show{display:block}
+/* Photos */
+.ph-search{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.ph-search input{max-width:260px}
+.recent{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.recent button{border:1px solid var(--line);background:var(--panel2);border-radius:8px;padding:6px 10px;font-size:14px;text-align:left}
+.recent button small{display:block;color:var(--muted);font-size:12px}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:14px}
+.pcard{display:flex;flex-direction:column;justify-content:flex-start;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;padding:0;text-align:left;box-shadow:var(--shadow)}
+.pcard img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block;background:var(--stage)}
+.pcard .pi{padding:8px 10px;font-size:14px}
+.pcard .pk{font-weight:700}
+.pcard .pm{color:var(--muted);font-size:13px}
+.pcard .ps{margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pcard.k-fail{border-color:var(--fail)} .pcard.k-check{border-color:var(--check)}
+dialog.big{border:0;border-radius:12px;padding:0;width:min(1000px,96vw);background:var(--panel);color:var(--ink)}
+dialog.big::backdrop{background:rgba(0,0,0,.65)}
+dialog.big img{width:100%;max-height:70vh;object-fit:contain;display:block;background:#000}
+dialog.big .body{padding:14px;display:grid;gap:6px}
 /* Setup steps */
 .setup-wrap{max-width:900px;margin:0 auto;display:grid;gap:14px}
 .setup-intro h2{margin:0;font-size:28px;font-weight:700}
@@ -218,6 +236,7 @@ nav.tabs .badge.show{display:grid}
     <nav class="tabs" role="tablist" aria-label="Sections">
       <button role="tab" aria-selected="false" data-v="setup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Setup</button>
       <button role="tab" aria-selected="true" data-v="inspect"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Inspect</button>
+      <button role="tab" aria-selected="false" data-v="photos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg>Photos</button>
       <button role="tab" aria-selected="false" data-v="log"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h7M9 7h3"/></svg>Log</button>
       <button role="tab" aria-selected="false" data-v="alerts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>Alerts<span class="badge" id="alertBadge">0</span></button>
     </nav>
@@ -404,6 +423,22 @@ nav.tabs .badge.show{display:grid}
       </div>
     </section>
 
+    <!-- PHOTOS -->
+    <section class="view" id="v-photos" aria-label="Photos">
+      <div class="page-head"><h1>Photo archive</h1><p>Photos saved by order number: the good sample, the first product, every Fail and Check, and a Pass photo every 30 minutes.</p></div>
+      <div class="panel">
+        <form class="ph-search" id="phForm">
+          <input type="text" id="phOrder" placeholder="Order #" autocomplete="off" inputmode="numeric">
+          <button class="btn primary" type="submit">Look up</button>
+          <span class="small muted" id="phMsg"></span>
+        </form>
+        <div class="small muted" style="margin-top:12px">Recent orders</div>
+        <div class="recent" id="phRecent"></div>
+      </div>
+      <div id="phHead" class="page-head" style="margin-top:16px" hidden><h1 id="phTitle" data-no-i18n></h1><p id="phSub"></p></div>
+      <div class="pgrid" id="phGrid"></div>
+    </section>
+
     <!-- LOG -->
     <section class="view" id="v-log" aria-label="Log">
       <div class="panel">
@@ -445,6 +480,18 @@ nav.tabs .badge.show{display:grid}
   <button class="ack" id="alarmAck">Acknowledge</button>
 </div>
 <div class="toast" id="toast" role="status"></div>
+<dialog class="big" id="phDlg">
+  <img id="phDlgImg" alt="Saved photo">
+  <div class="body">
+    <div><span class="verdict" id="phDlgV" style="font-size:24px"></span> <span class="small muted" id="phDlgMeta"></span></div>
+    <div id="phDlgSum"></div>
+    <div class="small muted" id="phDlgDef"></div>
+    <div class="row" style="justify-content:flex-end;margin-top:6px">
+      <a class="btn sm" id="phDlgDl" download>Download</a>
+      <button class="btn sm primary" id="phDlgClose" type="button">Close</button>
+    </div>
+  </div>
+</dialog>
 
 <script src="/i18n.js"></script>
 <script>
@@ -533,6 +580,7 @@ function showTab(name){
   document.querySelectorAll("nav.tabs button").forEach(x => x.setAttribute("aria-selected", x.dataset.v === name));
   document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.id === "v-" + name));
   if (name === "alerts") { unseenAlerts = 0; updateBadge(); }
+  if (name === "photos") loadRecent();
   // the one live camera picture moves to whichever tab needs it
   const slot = name === "setup" ? $("#setupCamSlot") : $("#inspectCamSlot");
   const block = $("#camBlock");
@@ -597,10 +645,12 @@ function renderRef(){
 $("#refFromCam").addEventListener("click", () => {
   if (!camOn) { toast("Start the camera in step 3 first."); return; }
   refDataUrl = grab(900, .8).toDataURL("image/jpeg", .8); store.set("qc.ref", refDataUrl); renderRef(); toast("Good sample saved."); refreshSteps();
+  savePhoto(grab(1280), "sample", {verdict:"SAMPLE", summary:"Good sample (approved product)", summary_es:"Muestra buena (producto aprobado)"});
 });
 $("#refInput").addEventListener("change", async e => {
   const f = e.target.files[0]; if (!f) return;
-  const c = await fileToCanvas(f, 900); refDataUrl = c.toDataURL("image/jpeg", .8); store.set("qc.ref", refDataUrl); renderRef(); e.target.value = "";
+  const c = await fileToCanvas(f, 1280); refDataUrl = c.toDataURL("image/jpeg", .8); store.set("qc.ref", refDataUrl); renderRef(); e.target.value = "";
+  savePhoto(c, "sample", {verdict:"SAMPLE", summary:"Good sample (approved product)", summary_es:"Muestra buena (producto aprobado)"});
 });
 $("#refClear").addEventListener("click", () => { refDataUrl = null; store.set("qc.ref", null); renderRef(); });
 
@@ -829,6 +879,7 @@ async function runInspection(canvas, source){
   } finally {
     busy = false;
     finishEntry(entry);
+    archivePhoto(canvas, entry);
     if (isArmed) setChip(state === "EMPTY" ? "Waiting for product" : "Product leaving", "");
     else if (camOn) setChip("Paused", "warn");
   }
@@ -1013,6 +1064,79 @@ $("#btnFinish").addEventListener("click", () => {
   S.setupDone = true; save(); refreshSteps(); showTab("inspect");
   if (camOn && !isArmed) toast("Click Start inspecting when the line is running.");
 });
+
+/* ---------- Photo archive ---------- */
+// Which inspection photos get kept: first product of each order, every Fail/Check, a Pass every 30 min.
+const PASS_EVERY_MS = 30 * 60 * 1000;
+let arch = store.get("qc.arch", {order:"", lastPass:0});
+function archivePhoto(canvas, entry){
+  if (!S.order.trim() || !["PASS","CHECK","FAIL","UNCLEAR"].includes(entry.verdict)) return;
+  if (arch.order !== S.order.trim()) arch = {order:S.order.trim(), lastPass:0, first:false};
+  let kind = null;
+  if (entry.verdict === "FAIL") kind = "fail";
+  else if (entry.verdict === "CHECK") kind = "check";
+  else if (!arch.first) kind = "first";
+  else if (entry.verdict === "PASS" && Date.now() - arch.lastPass >= PASS_EVERY_MS) kind = "pass";
+  arch.first = true;
+  if (!kind) return;
+  if (entry.verdict === "PASS") arch.lastPass = Date.now();
+  store.set("qc.arch", arch);
+  savePhoto(canvas, kind, entry);
+}
+async function savePhoto(canvas, kind, info){
+  if (!accessCode || !S.order.trim()) return;
+  // keep files a sensible size: up to 1280 px wide
+  let c = canvas;
+  if (c.width > 1280) { const t = document.createElement("canvas"); t.width = 1280; t.height = Math.round(c.height * 1280 / c.width); t.getContext("2d").drawImage(c, 0, 0, t.width, t.height); c = t; }
+  const body = {order:S.order.trim(), customer:S.customer || "", machine:S.line || "", kind, ts:info.ts || Date.now(),
+    verdict:info.verdict || "", summary:info.summary || "", summary_es:info.summary_es || "",
+    defects:(info.defects || []).map(d => `${d.check}: ${d.issue} (${d.severity})`).join("; "), image:c.toDataURL("image/jpeg", .82)};
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try { await api("/api/photos", {method:"POST", body:JSON.stringify(body)}); return; }
+    catch (e) { if (e.status === 401 || e.status === 400) return; await new Promise(r => setTimeout(r, 4000)); }
+  }
+}
+
+// Photos tab
+const KIND_LABEL = {sample:"Good sample", first:"First product", fail:"Fail", check:"Check", pass:"Pass", manual:"Photo"};
+const imgUrl = key => "/api/photos?img=" + encodeURIComponent(key) + "&code=" + encodeURIComponent(accessCode);
+async function loadRecent(){
+  const box = $("#phRecent"); if (!accessCode) { box.textContent = tr("Enter the access code in Setup first."); return; }
+  try {
+    const {orders} = await api("/api/photos?recent=1");
+    box.textContent = "";
+    if (!orders.length) { box.append(el("span", {class:"small muted", text:tr("No photos saved yet.")})); return; }
+    orders.forEach(o => box.append(el("button", {type:"button", onclick:() => { $("#phOrder").value = o.order; lookupOrder(o.order); }},
+      el("span", {"data-no-i18n":"", text:"#" + o.order}), el("small", {"data-no-i18n":"", text:[o.customer, o.machine, fmtDate(o.ts)].filter(Boolean).join(" · ")}))));
+  } catch { box.textContent = tr("Can't reach the photo archive. Check the internet connection."); }
+}
+async function lookupOrder(order){
+  order = String(order || "").trim(); if (!order) return;
+  const grid = $("#phGrid"); grid.textContent = ""; $("#phMsg").textContent = tr("Loading…");
+  try {
+    const {photos} = await api("/api/photos?order=" + encodeURIComponent(order));
+    $("#phMsg").textContent = "";
+    $("#phHead").hidden = false;
+    $("#phTitle").textContent = tr("Order #") + order + (photos[0] && photos[0].customer ? " — " + photos[0].customer : "");
+    $("#phSub").textContent = photos.length ? tr(`${photos.length} photos`) : tr("No photos saved for this order.");
+    photos.forEach(p => grid.append(el("button", {type:"button", class:"pcard k-" + (p.verdict || "").toLowerCase(), onclick:() => openPhoto(p)},
+      el("img", {src:imgUrl(p.img), alt:"", loading:"lazy"}),
+      el("div", {class:"pi"}, el("div", {class:"pk", text:tr(KIND_LABEL[p.kind] || "Photo")}),
+        el("div", {class:"pm", text:fmtDate(p.ts) + (p.machine ? " · " + p.machine : "")}),
+        p.summary ? el("div", {class:"ps", text:sumOf(p)}) : null))));
+  } catch (e) { $("#phMsg").textContent = tr(e.status === 401 ? "Enter the access code in Setup first." : "Can't reach the photo archive. Check the internet connection."); }
+}
+function openPhoto(p){
+  $("#phDlgImg").src = imgUrl(p.img);
+  const v = p.verdict && p.verdict !== "SAMPLE" ? p.verdict : "";
+  $("#phDlgV").textContent = v; $("#phDlgV").className = "verdict v-" + v;
+  $("#phDlgMeta").textContent = [tr(KIND_LABEL[p.kind] || "Photo"), fmtDate(p.ts), p.machine, p.customer, tr("Order #") + p.order].filter(Boolean).join(" · ");
+  $("#phDlgSum").textContent = sumOf(p); $("#phDlgDef").textContent = p.defects || "";
+  $("#phDlgDl").href = imgUrl(p.img); $("#phDlgDl").setAttribute("download", `order-${p.order}-${p.kind}-${new Date(p.ts).toISOString().slice(0,16).replace(/[:T]/g,"")}.jpg`);
+  $("#phDlg").showModal();
+}
+$("#phDlgClose").addEventListener("click", () => $("#phDlg").close());
+$("#phForm").addEventListener("submit", e => { e.preventDefault(); lookupOrder($("#phOrder").value); });
 
 /* ---------- Language and theme ---------- */
 document.querySelectorAll("#topLang [data-lang]").forEach(b => b.addEventListener("click", () => {

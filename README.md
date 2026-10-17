@@ -52,3 +52,4 @@ turn on "Sound the alarm on this phone".
 - public/index.html — the app
 - netlify/functions/inspect.mts — sends photos to the AI (API key stays on the server)
 - netlify/functions/events.mts — shared Fail/Check alert feed (Netlify Blobs)
+- netlify/functions/photos.mts — photo archive by order number (Netlify Blobs)
