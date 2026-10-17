@@ -208,7 +208,7 @@ nav.tabs .badge.show{display:grid}
             <button class="btn" id="btnBg" disabled>Learn empty belt</button>
             <button class="btn" id="btnZone" disabled>Set trigger zone</button>
             <button class="btn" id="btnNow" disabled>Inspect now</button>
-            <button class="btn" id="btnFlip" disabled>Switch camera</button>
+            <select class="btn" id="camSel" title="Camera" style="width:auto;max-width:260px"><option value="">Default camera</option></select>
           </div>
           <div class="notice bad" id="camErr" hidden></div>
           <div class="notice" id="bgTip" hidden>Triggering works best after you tap <b>Learn empty belt</b> with nothing in the yellow zone.</div>
@@ -281,6 +281,8 @@ nav.tabs .badge.show{display:grid}
         <div>
           <div class="panel form">
             <h2>Triggering and alerts</h2>
+            <label class="toggle"><input type="checkbox" id="sAuto"> Start camera and inspecting automatically when this page opens</label>
+            <span class="small muted" style="margin-top:-8px">Use this on the machine PC so inspection restarts by itself after a reboot.</span>
             <label class="f">Inspection speed
               <select id="sTier">
                 <option value="quick">Fast (about 1–3 s per product)</option>
@@ -312,7 +314,7 @@ nav.tabs .badge.show{display:grid}
           <div class="panel">
             <h2>Mounting checklist</h2>
             <ol class="steps small">
-              <li>Mount the device 2–4 ft above the belt, lens pointing straight down, and plug it in.</li>
+              <li>Mount the USB camera 2–4 ft above the belt, lens pointing straight down, and run the cable to the machine PC.</li>
               <li>Add steady lighting over the belt. Avoid glare from shop lights on glossy print.</li>
               <li>Start the camera and draw the yellow trigger zone across the belt where each product fully shows.</li>
               <li>With the belt empty, tap Learn empty belt.</li>
@@ -404,7 +406,7 @@ const CHECKS = [
   {id:"tag",    label:"Load tag",                     hint:"Tag present and readable"}
 ];
 const DEFAULTS = {line:"", job:"", checks:["print","ink","score","die","joint","damage"], notes:"",
-  tier:"fast", everyN:1, sens:6, settle:250, sound:true, vibrate:true, checkAlarm:false,
+  autoStart:false, camId:"", tier:"fast", everyN:1, sens:6, settle:250, sound:true, vibrate:true, checkAlarm:false,
   zone:{x:.25, y:.08, w:.5, h:.84}};
 const S = Object.assign({}, DEFAULTS, store.get("qc.settings", {}));
 const save = () => store.set("qc.settings", S);
@@ -471,7 +473,7 @@ function bindSetup(){
   const tog = (id, key) => { const i = $(id); i.checked = !!S[key]; i.addEventListener("change", () => { S[key] = i.checked; save(); }); };
   const code = $("#sCode"); code.value = accessCode;
   code.addEventListener("change", () => { accessCode = code.value.trim(); store.set("qc.code", accessCode); checkAi(); pollEvents(); });
-  tog("#sSound", "sound"); tog("#sVib", "vibrate"); tog("#sCheckAlarm", "checkAlarm");
+  tog("#sAuto", "autoStart"); tog("#sSound", "sound"); tog("#sVib", "vibrate"); tog("#sCheckAlarm", "checkAlarm");
   renderRef(); updateHeader();
 }
 function updateHeader(){ $("#hdrSub").textContent = [S.line || "No line set", S.job].filter(Boolean).join(" — "); }
@@ -492,21 +494,33 @@ $("#refClear").addEventListener("click", () => { refDataUrl = null; store.set("q
 
 /* ---------- Camera ---------- */
 const video = $("#video"), overlay = $("#overlay"), octx = overlay.getContext("2d"), stage = $("#stage");
-let stream = null, camOn = false, facing = "environment", wakeLock = null, loopTimer = null;
+let stream = null, camOn = false, wakeLock = null, loopTimer = null;
 async function startCamera(){
   ensureAudio();
   $("#camErr").hidden = true;
   try {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw Object.assign(new Error("no api"), {name:"NotSupportedError"});
-    stream = await navigator.mediaDevices.getUserMedia({audio:false, video:{facingMode:{ideal:facing}, width:{ideal:1280}, height:{ideal:720}}});
+    const want = {width:{ideal:1920}, height:{ideal:1080}};
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({audio:false, video: S.camId ? {...want, deviceId:{exact:S.camId}} : {...want, facingMode:{ideal:"environment"}}});
+    } catch (err) {
+      if (!S.camId || !["NotFoundError","OverconstrainedError"].includes(err && err.name)) throw err;
+      // saved camera is unplugged: fall back to any camera and tell the operator
+      toast("The selected camera wasn't found. Using the default camera — check the USB cable.");
+      stream = await navigator.mediaDevices.getUserMedia({audio:false, video:want});
+    }
+    stream.getVideoTracks()[0].addEventListener("ended", onCamLost);
+    listCameras();
     video.srcObject = stream; await video.play();
     camOn = true; $("#stageEmpty").hidden = true; $("#meter").hidden = false; $("#photoFallback").hidden = true;
     const r = (video.videoWidth || 16) / (video.videoHeight || 9);
     stage.style.aspectRatio = String(r);
     stage.style.setProperty("--stage-max", `min(100%, calc(62dvh * ${r.toFixed(4)}))`);
-    ["#btnArm","#btnBg","#btnZone","#btnNow","#btnFlip"].forEach(s => $(s).disabled = false);
+    ["#btnArm","#btnBg","#btnZone","#btnNow"].forEach(s => $(s).disabled = false);
     $("#btnCam").textContent = "Stop camera"; $("#btnCam").className = "btn";
     bg = null; $("#bgTip").hidden = false;
+    const savedBg = store.get("qc.bg", null);
+    if (savedBg) setTimeout(() => { const g = zoneGray(); if (g && g.length === savedBg.length) { bg = Float32Array.from(savedBg); $("#bgTip").hidden = true; } }, 800);
     requestWake(); resizeOverlay();
     clearInterval(loopTimer); loopTimer = setInterval(tick, 100);
   } catch (e) {
@@ -521,15 +535,50 @@ function stopCamera(){
   if (stream) stream.getTracks().forEach(t => t.stop());
   stream = null; camOn = false; video.srcObject = null;
   $("#stageEmpty").hidden = false; $("#meter").hidden = true; $("#bgTip").hidden = true;
-  ["#btnArm","#btnBg","#btnZone","#btnNow","#btnFlip"].forEach(s => $(s).disabled = true);
+  ["#btnArm","#btnBg","#btnZone","#btnNow"].forEach(s => $(s).disabled = true);
   $("#btnCam").textContent = "Start camera"; $("#btnCam").className = "btn primary";
   setChip("Idle", ""); releaseWake(); drawOverlay();
 }
-$("#btnCam").addEventListener("click", () => camOn ? stopCamera() : startCamera());
-$("#btnFlip").addEventListener("click", async () => { facing = facing === "environment" ? "user" : "environment"; const armed = isArmed; stopCamera(); await startCamera(); if (armed) setArmed(true); });
+$("#btnCam").addEventListener("click", () => { clearInterval(camRetry); camOn ? stopCamera() : startCamera(); });
+async function listCameras(){
+  try {
+    const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "videoinput");
+    const sel = $("#camSel"), active = stream && stream.getVideoTracks()[0] && stream.getVideoTracks()[0].getSettings().deviceId;
+    sel.textContent = "";
+    if (!devs.length) sel.append(el("option", {value:"", text:"No camera found"}));
+    devs.forEach((d, i) => sel.append(el("option", {value:d.deviceId, text:d.label || ("Camera " + (i + 1))})));
+    sel.value = active || S.camId || (devs[0] && devs[0].deviceId) || "";
+  } catch {}
+}
+$("#camSel").addEventListener("change", async e => {
+  S.camId = e.target.value; save(); bg = null; prevGray = null; store.set("qc.bg", null);
+  if (camOn) { const armed = isArmed; stopCamera(); await startCamera(); if (armed && camOn) setArmed(true); }
+  toast("Camera changed. Tap Learn empty belt with the belt clear.");
+});
+// USB camera unplugged or lost while running: alarm and keep retrying
+let camRetry = null;
+function onCamLost(){
+  if (!camOn) return;
+  const wasArmed = isArmed; stopCamera();
+  showAlarm({verdict:"CAMERA", ts:Date.now(), line:S.line, job:S.job, thumb:"", summary:"Camera disconnected. Check the USB cable. Inspection will resume when the camera is back.", defects:[]});
+  clearInterval(camRetry);
+  camRetry = setInterval(async () => {
+    await startCamera();
+    if (camOn) { clearInterval(camRetry); if (wasArmed) setArmed(true); toast("Camera reconnected. Inspection resumed."); }
+  }, 5000);
+}
+if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener("devicechange", listCameras);
 async function requestWake(){ try{ if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen"); }catch{} }
 function releaseWake(){ try{ wakeLock && wakeLock.release(); }catch{} wakeLock = null; }
-document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && camOn) requestWake(); });
+let hiddenAt = 0;
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") { if (isArmed) hiddenAt = Date.now(); return; }
+  if (camOn) requestWake();
+  if (hiddenAt) {
+    const min = Math.round((Date.now() - hiddenAt) / 60000); hiddenAt = 0;
+    if (min >= 1) toast(`This window was hidden for about ${min} min, so some products may have been missed. Keep Line QC visible, or start it with the Line QC shortcut.`);
+  }
+});
 
 function grab(maxW, q){
   const w = video.videoWidth, h = video.videoHeight, s = Math.min(1, maxW / w);
@@ -573,7 +622,7 @@ overlay.addEventListener("pointermove", e => { if (!zoning || !dragStart) return
   S.zone = {x:Math.min(p.x, dragStart.x), y:Math.min(p.y, dragStart.y), w:Math.abs(p.x - dragStart.x), h:Math.abs(p.y - dragStart.y)}; drawOverlay(); });
 overlay.addEventListener("pointerup", () => { if (!zoning || !dragStart) return; dragStart = null;
   if (S.zone.w < .05 || S.zone.h < .05) S.zone = {...DEFAULTS.zone};
-  save(); bg = null; prevGray = null; setZoning(false); toast("Zone saved. Tap Learn empty belt with the belt clear."); $("#bgTip").hidden = false; });
+  save(); bg = null; prevGray = null; store.set("qc.bg", null); setZoning(false); toast("Zone saved. Tap Learn empty belt with the belt clear."); $("#bgTip").hidden = false; });
 function setZoning(on){ zoning = on; stage.classList.toggle("zoning", on); $("#chipZone").hidden = !on; $("#btnZone").classList.toggle("on", on); drawOverlay(); }
 $("#btnZone").addEventListener("click", () => setZoning(!zoning));
 
@@ -594,7 +643,7 @@ function zoneGray(){
 }
 const meanDiff = (a, b) => { if (!a || !b || a.length !== b.length) return 0; let s = 0; for (let i = 0; i < a.length; i++) s += Math.abs(a[i] - b[i]); return s / a.length; };
 const threshold = () => 40 - S.sens * 3.1;
-$("#btnBg").addEventListener("click", () => { const g = zoneGray(); if (!g) return; bg = g; state = "EMPTY"; presentN = clearN = 0; $("#bgTip").hidden = true; toast("Empty belt learned."); });
+$("#btnBg").addEventListener("click", () => { const g = zoneGray(); if (!g) return; bg = g; store.set("qc.bg", Array.from(g, v => Math.round(v))); state = "EMPTY"; presentN = clearN = 0; $("#bgTip").hidden = true; toast("Empty belt learned."); });
 
 function tick(){
   if (zoneFlash > 0) { zoneFlash--; if (!zoneFlash) drawOverlay(); }
@@ -774,6 +823,7 @@ function renderSup(events){
 
 /* ---------- Alarm, sound, toast ---------- */
 let actx = null, alarmTimer = null, currentAlarm = null, extraFails = 0;
+document.addEventListener("pointerdown", () => ensureAudio(), {once:true});
 function ensureAudio(){ try { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === "suspended") actx.resume(); } catch {} }
 function tone(freq, start, dur, vol = .5){
   if (!actx) return; const o = actx.createOscillator(), g = actx.createGain(); o.type = "square"; o.frequency.value = freq;
@@ -788,13 +838,14 @@ function showAlarm(entry, remote){
   if (a.classList.contains("show")) { extraFails++; $("#alarmMore").textContent = `+${extraFails} more since this alarm`; return; }
   currentAlarm = entry; extraFails = 0; $("#alarmMore").textContent = "";
   a.style.background = entry.verdict === "CHECK" ? "var(--check)" : "";
-  $("#alarmTitle").textContent = entry.verdict;
+  $("#alarmImg").hidden = !entry.thumb;
+  $("#alarmTitle").textContent = entry.verdict === "CAMERA" ? "CAMERA OFF" : entry.verdict;
   $("#alarmWhere").textContent = [entry.line || "Line not set", entry.job, fmtTime(entry.ts)].filter(Boolean).join(" · ");
   $("#alarmImg").src = entry.thumb;
   const ul = $("#alarmList"); ul.textContent = "";
   ul.append(el("li", {text:entry.summary}));
   entry.defects.slice(0, 4).forEach(d => ul.append(el("li", {style:"font-size:16px;opacity:.9", text:"• " + (d.check ? d.check + ": " : "") + d.issue})));
-  a.classList.add("show"); if (entry.verdict === "FAIL") a.classList.add("pulse");
+  a.classList.add("show"); if (entry.verdict === "FAIL" || entry.verdict === "CAMERA") a.classList.add("pulse");
   if (S.vibrate && navigator.vibrate) navigator.vibrate([400, 150, 400, 150, 400]);
   if (S.sound || remote) { siren(); clearInterval(alarmTimer); alarmTimer = setInterval(siren, 1400); }
   $("#alarmAck").focus();
@@ -821,6 +872,9 @@ $("#btnTestAlarm").addEventListener("click", () => {
 
 /* ---------- Boot ---------- */
 bindSetup(); renderCounts(); renderLog(); setChip("Idle", "");
+if (S.autoStart && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+  setTimeout(async () => { await startCamera(); if (camOn) setTimeout(() => setArmed(true), 1500); }, 800);
+} else listCameras();
 checkAi(); pollEvents();
 if (!accessCode) setTimeout(() => toast("Tap the AI status at the top right to enter the plant access code."), 600);
 if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) $("#photoFallback").hidden = false;

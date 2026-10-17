@@ -28,14 +28,22 @@ Open a terminal in this folder and run:
 (Drag-and-drop deploys don't include the server functions, so use the command.)
 Re-run the deploy command after any code change. Env var changes need a redeploy.
 
-## Step 3 — Set up a camera station
-1. Open https://gwpg-line-qc.netlify.app on the tablet/phone.
-2. Tap the AI status pill (top right) and enter the access code.
-3. Share > Add to Home Screen, then open it from the home screen icon.
-4. Follow the mounting checklist on the Setup tab.
+## Step 3 — Set up a machine PC
+1. Plug a USB camera into the PC and mount it 2–4 ft over the belt, pointing straight down.
+2. Copy `windows/Start Line QC.bat` to the PC's desktop and double-click it.
+   (It opens Line QC in its own Chrome window that keeps working when Encore is in front.)
+3. Click "Allow" when Chrome asks to use the camera.
+4. Click the AI status (top right) and enter the access code.
+5. Inspect tab: pick the USB camera from the camera list, click Start camera,
+   draw the trigger zone, and click Learn empty belt with the belt clear.
+6. Setup tab: fill in the machine and job, take the good sample, and tick
+   "Start camera and inspecting automatically when this page opens".
+7. To start automatically after a reboot: Windows+R, type shell:startup, Enter,
+   and copy the .bat file into that folder.
+8. Windows power settings: set Sleep to "Never" for this PC.
 
-Supervisors: open the same link, enter the code, go to the Alerts tab and turn
-on "Sound the alarm on this phone".
+Supervisors: open the site on a phone, enter the code, go to the Alerts tab and
+turn on "Sound the alarm on this phone".
 
 ## Optional settings (Netlify environment variables)
 - QC_MODEL_FAST — model for Fast mode (default claude-haiku-4-5-20251001)
