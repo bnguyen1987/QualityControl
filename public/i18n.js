@@ -124,6 +124,21 @@
     "No failures or checks reported yet.": "No hay fallas ni revisiones reportadas todavía.",
     "Acknowledge": "Enterado", "Acknowledged": "Atendido",
 
+    // Automatic trigger
+    "Relearn empty belt": "Volver a aprender banda vacía",
+    "Click": "Haga clic en",
+    "and drag a box across the belt where each product fully shows (use the camera picture in step 3).": "y arrastre un recuadro sobre la banda donde se vea cada producto completo (use la imagen de la cámara del paso 3).",
+    "Keep the yellow box clear for a few seconds. The camera learns the empty belt and sets itself up on the first few products. Nothing to adjust.":
+      "Mantenga el recuadro amarillo despejado unos segundos. La cámara aprende la banda vacía y se ajusta sola con los primeros productos. No hay nada que ajustar.",
+    "Adjust the trigger and photo timing automatically (recommended)": "Ajustar el disparo y el momento de la foto automáticamente (recomendado)",
+    "Learning the empty belt… keep the yellow box clear.": "Aprendiendo la banda vacía… mantenga despejado el recuadro amarillo.",
+    "Waiting for the belt to be still and the yellow box to be clear…": "Esperando que la banda esté quieta y el recuadro amarillo despejado…",
+    "Empty belt not learned yet.": "Banda vacía todavía no aprendida.",
+    "Trigger ready.": "Disparo listo.",
+    "Keep the yellow box clear for a few seconds.": "Mantenga despejado el recuadro amarillo unos segundos.",
+    "Zone saved. Keep it clear for a few seconds while it learns the empty belt.": "Zona guardada. Manténgala despejada unos segundos mientras aprende la banda vacía.",
+    "Camera changed. Keep the yellow box clear for a few seconds while it relearns the belt.": "Cámara cambiada. Mantenga despejado el recuadro amarillo unos segundos mientras vuelve a aprender la banda.",
+
     // Photos
     "Photos": "Fotos", "Photo archive": "Archivo de fotos",
     "Up to 5 photos per order: the good sample plus a few products spread through the run (a Fail is always saved first).":
@@ -169,6 +184,7 @@
     [/^— medium, (\d+)\/10$/, (m, n) => `— media, ${n}/10`],
     [/^\+(\d+) more since this alarm$/, (m, n) => `+${n} más desde esta alarma`],
     [/^(.*) · confidence (\d+)%(.*)$/, (m, a, n, b) => `${a} · confianza ${n}%${b}`],
+    [/^Calibrating: (\d+) of (\d+) products seen\.$/, (m, a, b) => `Calibrando: ${a} de ${b} productos vistos.`],
     [/^(\d+) photos$/, (m, n) => `${n} fotos`],
     [/^Check: (.*)$/, (m, s) => "Revisar: " + s],
     [/^Camera (\d+)$/, (m, n) => "Cámara " + n],

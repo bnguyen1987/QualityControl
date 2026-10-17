@@ -269,13 +269,13 @@ dialog.big .body{padding:14px;display:grid;gap:6px}
           <div class="controls">
             <button class="btn primary" id="btnCam">Start camera</button>
             <button class="btn go grow" id="btnArm" disabled>Start inspecting</button>
-            <button class="btn" id="btnBg" disabled>Learn empty belt</button>
+            <button class="btn" id="btnBg" disabled>Relearn empty belt</button>
             <button class="btn" id="btnZone" disabled>Set trigger zone</button>
             <button class="btn" id="btnNow" disabled>Inspect now</button>
             <select class="btn" id="camSel" title="Camera" style="width:auto;max-width:260px"><option value="">Default camera</option></select>
           </div>
           <div class="notice bad" id="camErr" hidden></div>
-          <div class="notice" id="bgTip" hidden>Triggering works best after you tap <b>Learn empty belt</b> with nothing in the yellow zone.</div>
+          <div class="notice" id="bgTip" hidden><span id="trigStatus"></span></div>
           <div class="notice" id="photoFallback" hidden>
             Live camera isn't available here. You can still inspect one product at a time:
             <div class="row" style="margin-top:8px"><label class="btn sm primary" for="snapInput">Take a photo to inspect</label>
@@ -349,10 +349,10 @@ dialog.big .body{padding:14px;display:grid;gap:6px}
         <div class="step" id="st4">
           <div class="step-h"><div class="num"><span>4</span></div><div><h3>Trigger zone and empty belt</h3><div class="sub">Tells the camera when a product has arrived.</div></div></div>
           <ol class="steps small" style="margin:0">
-            <li>Click <b>Set trigger zone</b> and drag a box across the belt where each product fully shows.</li>
-            <li>With nothing in the yellow box, click <b>Learn empty belt</b>.</li>
+            <li>Click <b>Set trigger zone</b> and drag a box across the belt where each product fully shows (use the camera picture in step 3).</li>
+            <li>Keep the yellow box clear for a few seconds. The camera learns the empty belt and sets itself up on the first few products. Nothing to adjust.</li>
           </ol>
-          <p class="small muted" style="margin:0">Use the camera picture in step 3 for both.</p>
+          <div class="row"><span class="small" id="calStatus"></span></div>
         </div>
 
         <div class="step" id="st5">
@@ -396,6 +396,8 @@ dialog.big .body{padding:14px;display:grid;gap:6px}
               </select>
               <span class="hint">On fast lines, use a higher number so the AI can keep up.</span>
             </label>
+            <label class="toggle" style="grid-column:1/-1"><input type="checkbox" id="sAutoTrig"> Adjust the trigger and photo timing automatically (recommended)</label>
+            <div class="two" id="manualTrig" style="grid-column:1/-1">
             <label class="f">Trigger sensitivity <span class="hint" id="sensVal"></span>
               <input type="range" id="sSens" min="1" max="10" step="1">
               <span class="hint">Raise it if products are missed; lower it if one product triggers twice.</span>
@@ -404,6 +406,7 @@ dialog.big .body{padding:14px;display:grid;gap:6px}
               <input type="range" id="sSettle" min="0" max="1500" step="50">
               <span class="hint">Raise it if products are cut off at the edge of the photo.</span>
             </label>
+            </div>
           </div>
           <label class="toggle"><input type="checkbox" id="sAuto"> Start camera and inspecting automatically when this page opens (recommended on the machine PC)</label>
         </div>
@@ -539,7 +542,7 @@ const CHECKS = [
   {id:"tag",    label:"Load tag",                     hint:"Tag present and readable"}
 ];
 const DEFAULTS = {line:"", job:"", customer:"", order:"", qty:"", checks:["print","ink","score","die","joint","damage"], notes:"",
-  autoStart:false, camId:"", tier:"fast", everyN:1, sens:6, settle:250, sound:true, vibrate:true, checkAlarm:false,
+  autoStart:false, autoTrig:true, camId:"", tier:"fast", everyN:1, sens:6, settle:250, sound:true, vibrate:true, checkAlarm:false,
   zone:{x:.25, y:.08, w:.5, h:.84}};
 const S = Object.assign({}, DEFAULTS, store.get("qc.settings", {}));
 const save = () => store.set("qc.settings", S);
@@ -633,7 +636,10 @@ function bindSetup(){
   const tog = (id, key) => { const i = $(id); i.checked = !!S[key]; i.addEventListener("change", () => { S[key] = i.checked; save(); }); };
   const code = $("#sCode"); code.value = accessCode;
   code.addEventListener("change", () => { accessCode = code.value.trim(); store.set("qc.code", accessCode); checkAi(); pollEvents(); });
-  tog("#sAuto", "autoStart"); tog("#sSound", "sound"); tog("#sVib", "vibrate"); tog("#sCheckAlarm", "checkAlarm");
+  tog("#sAuto", "autoStart"); tog("#sAutoTrig", "autoTrig");
+  const showManual = () => { $("#manualTrig").hidden = S.autoTrig !== false; };
+  $("#sAutoTrig").addEventListener("change", () => { showManual(); if (S.autoTrig !== false && !cal && bg) beginLearn(); });
+  showManual(); tog("#sSound", "sound"); tog("#sVib", "vibrate"); tog("#sCheckAlarm", "checkAlarm");
   renderRef(); updateHeader();
 }
 function updateHeader(){
@@ -683,11 +689,15 @@ async function startCamera(){
     stage.style.setProperty("--stage-max", `min(100%, calc(62dvh * ${r.toFixed(4)}))`);
     ["#btnArm","#btnBg","#btnZone","#btnNow"].forEach(s => $(s).disabled = false);
     $("#btnCam").textContent = "Stop camera"; $("#btnCam").className = "btn";
-    bg = null; $("#bgTip").hidden = false;
+    bg = null; learn = null; $("#bgTip").hidden = false;
     const savedBg = store.get("qc.bg", null);
-    if (savedBg) setTimeout(() => { const g = zoneGray(); if (g && g.length === savedBg.length) { bg = Float32Array.from(savedBg); $("#bgTip").hidden = true; } }, 800);
+    setTimeout(() => {
+      const g = zoneGray();
+      if (savedBg && g && g.length === savedBg.length) { bg = Float32Array.from(savedBg); cal = store.get("qc.cal", null); }
+      else beginLearn();
+    }, 800);
     requestWake(); resizeOverlay();
-    clearInterval(loopTimer); loopTimer = setInterval(tick, 100);
+    clearInterval(loopTimer); loopTimer = setInterval(tick, TICK_MS);
   } catch (e) {
     const msg = e && e.name === "NotAllowedError" ? "Camera permission was blocked. Allow camera access for this page, then try again."
       : e && e.name === "NotFoundError" ? "No camera was found on this device."
@@ -716,9 +726,9 @@ async function listCameras(){
   } catch {}
 }
 $("#camSel").addEventListener("change", async e => {
-  S.camId = e.target.value; save(); bg = null; prevGray = null; store.set("qc.bg", null);
+  S.camId = e.target.value; save(); resetTrigger();
   if (camOn) { const armed = isArmed; stopCamera(); await startCamera(); if (armed && camOn) setArmed(true); }
-  toast("Camera changed. Tap Learn empty belt with the belt clear.");
+  toast("Camera changed. Keep the yellow box clear for a few seconds while it relearns the belt.");
 });
 // USB camera unplugged or lost while running: alarm and keep retrying
 let camRetry = null;
@@ -787,7 +797,7 @@ overlay.addEventListener("pointermove", e => { if (!zoning || !dragStart) return
   S.zone = {x:Math.min(p.x, dragStart.x), y:Math.min(p.y, dragStart.y), w:Math.abs(p.x - dragStart.x), h:Math.abs(p.y - dragStart.y)}; drawOverlay(); });
 overlay.addEventListener("pointerup", () => { if (!zoning || !dragStart) return; dragStart = null;
   if (S.zone.w < .05 || S.zone.h < .05) S.zone = {...DEFAULTS.zone};
-  save(); bg = null; prevGray = null; store.set("qc.bg", null); setZoning(false); toast("Zone saved. Tap Learn empty belt with the belt clear."); $("#bgTip").hidden = false; });
+  save(); setZoning(false); resetTrigger(); beginLearn(); toast("Zone saved. Keep it clear for a few seconds while it learns the empty belt."); });
 function setZoning(on){ zoning = on; stage.classList.toggle("zoning", on); $("#chipZone").hidden = !on; $("#btnZone").classList.toggle("on", on); drawOverlay(); }
 $("#btnZone").addEventListener("click", () => setZoning(!zoning));
 
@@ -807,31 +817,102 @@ function zoneGray(){
   return g;
 }
 const meanDiff = (a, b) => { if (!a || !b || a.length !== b.length) return 0; let s = 0; for (let i = 0; i < a.length; i++) s += Math.abs(a[i] - b[i]); return s / a.length; };
-const threshold = () => 40 - S.sens * 3.1;
-$("#btnBg").addEventListener("click", () => { const g = zoneGray(); if (!g) return; bg = g; store.set("qc.bg", Array.from(g, v => Math.round(v))); state = "EMPTY"; presentN = clearN = 0; $("#bgTip").hidden = true; toast("Empty belt learned."); });
+const TICK_MS = 50;
+const AUTO = () => S.autoTrig !== false;
+// cal: what the camera learned about this belt — how much the empty belt flickers on its own (noise)
+// and how strong a real product looks (peaks of recent products). Thresholds sit between the two.
+let cal = store.get("qc.cal", null), learn = null, curPeak = 0, settleHist = [], stateSince = Date.now();
+const CAL_PRODUCTS = 5;
+function thresholds(){
+  if (!AUTO()) { const t = 40 - S.sens * 3.1; return {on:t, off:t * .6}; }
+  const n = cal ? cal.noise : 3;
+  let on = Math.max(n * 3 + 2, n + 5);
+  if (cal && cal.peaks.length) {
+    const p = [...cal.peaks].sort((x, y) => x - y), med = p[Math.floor(p.length / 2)];
+    on = Math.max(on, n + (med - n) * .3);
+  }
+  on = Math.min(on, 45);
+  return {on, off:n + (on - n) * .5};
+}
+function saveCal(){ store.set("qc.cal", cal); }
+function resetTrigger(){ bg = null; prevGray = null; cal = null; learn = null; store.set("qc.bg", null); store.set("qc.cal", null); state = "EMPTY"; presentN = clearN = 0; }
+function beginLearn(){ bg = null; learn = {frames:[], started:Date.now()}; state = "EMPTY"; presentN = clearN = 0; refreshTrigStatus(); }
+$("#btnBg").addEventListener("click", () => { cal = null; beginLearn(); toast("Keep the yellow box clear for a few seconds."); });
+
+// learn the empty belt: wait for ~1.5 s of a still picture, average it, and measure its flicker
+function learnStep(g, motion){
+  if (motion > 2.5) { learn.frames = []; return; }
+  learn.frames.push(g);
+  if (learn.frames.length < 30) return;
+  const fr = learn.frames, avg = new Float32Array(g.length);
+  fr.forEach(f => { for (let i = 0; i < f.length; i++) avg[i] += f[i] / fr.length; });
+  let noise = 0; fr.forEach(f => { noise = Math.max(noise, meanDiff(f, avg)); });
+  bg = avg; learn = null;
+  cal = {noise:Math.max(noise * 1.3, 0.8), peaks:(cal && cal.peaks) || []}; saveCal();
+  store.set("qc.bg", Array.from(bg, v => Math.round(v)));
+  toast("Empty belt learned."); refreshTrigStatus(); refreshSteps();
+}
+function trigStatusText(){
+  if (!camOn) return "";
+  if (learn) return Date.now() - learn.started > 15000
+    ? "Waiting for the belt to be still and the yellow box to be clear…"
+    : "Learning the empty belt… keep the yellow box clear.";
+  if (!bg) return "Empty belt not learned yet.";
+  if (AUTO() && (!cal || cal.peaks.length < CAL_PRODUCTS)) return `Calibrating: ${cal ? cal.peaks.length : 0} of ${CAL_PRODUCTS} products seen.`;
+  return "Trigger ready.";
+}
+let lastTrigText = "";
+function refreshTrigStatus(){
+  const t = trigStatusText(); if (t === lastTrigText) return; lastTrigText = t;
+  $("#trigStatus").textContent = t; $("#calStatus").textContent = t;
+  $("#bgTip").hidden = !t || t === "Trigger ready.";
+  $("#calStatus").style.color = t === "Trigger ready." ? "var(--pass)" : "var(--muted)";
+}
 
 function tick(){
   if (zoneFlash > 0) { zoneFlash--; if (!zoneFlash) drawOverlay(); }
   const g = zoneGray(); if (!g) return;
-  const thr = threshold();
-  const level = bg ? meanDiff(g, bg) : meanDiff(g, prevGray);
+  const motion = meanDiff(g, prevGray);
   prevGray = g;
-  $("#meterFill").style.width = Math.min(100, level / (thr * 2) * 100) + "%";
+  if (learn) { learnStep(g, motion); refreshTrigStatus(); $("#meterFill").style.width = "0%"; return; }
+  const {on, off} = thresholds();
+  const level = bg ? meanDiff(g, bg) : motion;
+  $("#meterFill").style.width = Math.min(100, level / (on * 2) * 100) + "%";
+  refreshTrigStatus();
   if (!isArmed) return;
-  const present = level > thr, gone = level < thr * .6;
   if (state === "EMPTY") {
-    if (bg && level < thr * .5) for (let i = 0; i < bg.length; i++) bg[i] = bg[i] * .97 + g[i] * .03; // follow slow lighting changes
-    presentN = present ? presentN + 1 : 0;
-    if (presentN >= 2) { state = "SETTLING"; setChip("Product in view", "live"); settleTimer = setTimeout(onProduct, S.settle); }
+    if (bg && level < on * .5) for (let i = 0; i < bg.length; i++) bg[i] = bg[i] * .97 + g[i] * .03; // follow slow lighting changes
+    presentN = level > on ? presentN + 1 : 0;
+    if (presentN >= 2) {
+      state = "SETTLING"; stateSince = Date.now(); curPeak = level; settleHist = [level]; setChip("Product in view", "live");
+      if (!AUTO()) settleTimer = setTimeout(onProduct, S.settle);
+    }
+  } else if (state === "SETTLING") {
+    curPeak = Math.max(curPeak, level);
+    if (AUTO()) {
+      // take the photo once the product is fully in the zone: the change stops growing (or starts to drop)
+      settleHist.push(level);
+      const n = settleHist.length, prevMax = Math.max(...settleHist.slice(Math.max(0, n - 4), n - 1));
+      const stopped = n >= 3 && level <= prevMax * 1.03;
+      if (stopped || Date.now() - stateSince > 1500) onProduct();
+    }
   } else if (state === "WAIT_CLEAR") {
-    clearN = gone ? clearN + 1 : 0;
-    // no empty-belt reference: motion stops when product stops, so also re-arm after a quiet spell
-    if (clearN >= 3) { state = "EMPTY"; presentN = 0; if (!busy) setChip("Waiting for product", ""); }
+    curPeak = Math.max(curPeak, level);
+    clearN = level < off ? clearN + 1 : 0;
+    if (clearN >= 6) {
+      if (AUTO() && cal && curPeak > 0) { cal.peaks.push(curPeak); if (cal.peaks.length > 15) cal.peaks.shift(); saveCal(); }
+      state = "EMPTY"; presentN = 0; if (!busy) setChip("Waiting for product", "");
+    } else if (AUTO() && Date.now() - stateSince > 20000 && motion < 2.5) {
+      // nothing moved for 20 s but the zone still looks "full" (belt stopped, lighting changed): relearn the belt
+      bg = Float32Array.from(g); store.set("qc.bg", Array.from(bg, v => Math.round(v)));
+      state = "EMPTY"; presentN = 0; if (!busy) setChip("Waiting for product", "");
+    }
   }
 }
 function onProduct(){
   if (!isArmed) return;
-  state = "WAIT_CLEAR"; clearN = 0; counts.seen++; zoneFlash = 4; drawOverlay();
+  if (state !== "SETTLING") return;
+  state = "WAIT_CLEAR"; stateSince = Date.now(); clearN = 0; counts.seen++; zoneFlash = 4; drawOverlay();
   if (counts.seen % S.everyN !== 0) { renderCounts(); return; }
   if (busy) { counts.notInspected++; renderCounts(); return; }
   const c = grab(1280); runInspection(c, "auto");
