@@ -31,6 +31,20 @@ const str = (v: unknown, n: number) => String(v ?? "").slice(0, n);
 const orderKey = (v: unknown) => str(v, 40).trim().toUpperCase().replace(/[^A-Z0-9-]/g, "");
 const KINDS = ["sample", "first", "fail", "check", "pass", "manual"];
 
+// one-time scan to (re)build the recent-orders list from the saved photos
+async function rebuildIndex(s: ReturnType<typeof store>) {
+  const { directories } = await s.list({ prefix: "meta/", directories: true });
+  const orders = await Promise.all(directories.map(async (d) => {
+    const { blobs } = await s.list({ prefix: d.endsWith("/") ? d : d + "/" });
+    const keys = blobs.map((b) => b.key).sort();
+    const last: any = keys.length ? await s.get(keys[keys.length - 1], { type: "json" }) : null;
+    return last ? { order: last.order, customer: last.customer, machine: last.machine, ts: last.ts, count: keys.length } : null;
+  }));
+  const idx = orders.filter(Boolean).sort((a: any, b: any) => b.ts - a.ts).slice(0, 50);
+  await s.setJSON("index/recent", idx);
+  return idx;
+}
+
 export default async (req: Request, context: Context) => {
   const url = new URL(req.url);
   const denied = checkAccess(req, url);
@@ -47,14 +61,10 @@ export default async (req: Request, context: Context) => {
     }
 
     if (url.searchParams.get("recent")) {
-      const { directories } = await s.list({ prefix: "meta/", directories: true });
-      const orders = await Promise.all(directories.map(async (d) => {
-        const { blobs } = await s.list({ prefix: d.endsWith("/") ? d : d + "/" });
-        const keys = blobs.map((b) => b.key).sort();
-        const last = keys.length ? await s.get(keys[keys.length - 1], { type: "json" }) : null;
-        return last ? { order: last.order, customer: last.customer, machine: last.machine, ts: last.ts, count: keys.length } : null;
-      }));
-      return json({ orders: orders.filter(Boolean).sort((a: any, b: any) => b.ts - a.ts).slice(0, 30) });
+      // a small running list of recent orders, kept up to date on each save (fast no matter how many orders exist)
+      let idx: any = await s.get("index/recent", { type: "json" });
+      if (!Array.isArray(idx)) idx = await rebuildIndex(s);
+      return json({ orders: idx.slice(0, 30) });
     }
 
     const order = orderKey(url.searchParams.get("order"));
@@ -83,6 +93,14 @@ export default async (req: Request, context: Context) => {
       summary: str(b.summary, 300), summary_es: str(b.summary_es, 300), defects: str(b.defects, 1500),
     };
     await s.setJSON(`meta/${order}/${id}`, meta);
+    try {
+      let idx: any = await s.get("index/recent", { type: "json" });
+      if (!Array.isArray(idx)) idx = await rebuildIndex(s);
+      const prev = idx.find((o: any) => orderKey(o.order) === order);
+      idx = idx.filter((o: any) => orderKey(o.order) !== order);
+      idx.unshift({ order: meta.order, customer: meta.customer, machine: meta.machine, ts, count: (prev ? prev.count : 0) + 1 });
+      await s.setJSON("index/recent", idx.slice(0, 50));
+    } catch {}
     return json({ ok: true, id });
   }
 

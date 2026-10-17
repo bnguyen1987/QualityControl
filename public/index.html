@@ -276,6 +276,10 @@ dialog.big .body{padding:14px;display:grid;gap:6px}
           </div>
           <div class="notice bad" id="camErr" hidden></div>
           <div class="notice" id="bgTip" hidden><span id="trigStatus"></span></div>
+          <div class="notice go-setup bad" id="sampleStale" hidden>
+            <span>The good sample is from a different order, so it isn't being used. Retake it for this order.</span>
+            <button class="btn sm primary" type="button" data-goto="setup">Go to Setup</button>
+          </div>
           <div class="notice" id="photoFallback" hidden>
             Live camera isn't available here. You can still inspect one product at a time:
             <div class="row" style="margin-top:8px"><label class="btn sm primary" for="snapInput">Take a photo to inspect</label>
@@ -369,6 +373,7 @@ dialog.big .body{padding:14px;display:grid;gap:6px}
             <div class="ph" id="refPh">No sample yet</div>
             <div style="display:grid;gap:8px">
               <span class="small muted">Put an approved product in the yellow zone, then take the photo.</span>
+              <span class="small" id="refStale" hidden style="color:var(--fail);font-weight:600">This sample is from a different order. Retake it for this order.</span>
               <div class="row">
                 <button class="btn sm primary" id="refFromCam" type="button">Take good sample now</button>
                 <label class="btn sm" for="refInput" style="display:inline-grid;place-items:center">Upload photo</label>
@@ -546,7 +551,9 @@ const DEFAULTS = {line:"", job:"", customer:"", order:"", qty:"", checks:["print
   zone:{x:.25, y:.08, w:.5, h:.84}};
 const S = Object.assign({}, DEFAULTS, store.get("qc.settings", {}));
 const save = () => store.set("qc.settings", S);
-let refDataUrl = store.get("qc.ref", null);
+let refDataUrl = store.get("qc.ref", null), refOrder = store.get("qc.refOrder", null);
+// the good sample only counts for the order it was taken on
+const refValid = () => !!refDataUrl && (refOrder == null || refOrder === S.order.trim());
 const deviceId = store.get("qc.device", null) || (() => { const id = Math.random().toString(36).slice(2, 10); store.set("qc.device", id); return id; })();
 
 /* ---------- Site API ---------- */
@@ -576,6 +583,7 @@ async function checkAi(){
     aiOk = false; setAi("bad", e.status === 401 ? "Wrong access code" : e.code === "setup" ? "Site not set up" : "Offline");
   }
 }
+setInterval(() => { if (!aiOk && accessCode) checkAi(); }, 30000);
 aiPill.addEventListener("click", () => {
   const c = prompt("Plant access code", accessCode); if (c == null) return;
   accessCode = c.trim(); store.set("qc.code", accessCode); $("#sCode").value = accessCode; checkAi(); pollEvents();
@@ -585,7 +593,7 @@ function showSupOff(on){ $("#supOff").hidden = !on; }
 function showTab(name){
   document.querySelectorAll("nav.tabs button").forEach(x => x.setAttribute("aria-selected", x.dataset.v === name));
   document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.id === "v-" + name));
-  if (name === "alerts") { unseenAlerts = 0; updateBadge(); }
+  if (name === "alerts") { unseenAlerts = 0; updateBadge(); pollEvents(); }
   if (name === "photos") loadRecent();
   // the one live camera picture moves to whichever tab needs it
   const slot = name === "setup" ? $("#setupCamSlot") : $("#inspectCamSlot");
@@ -611,7 +619,8 @@ function bindSetup(){
   // Customer + order make up the job label used on alarms, alerts and the log
   if (S.customer === "" && S.order === "" && S.job) S.customer = S.job; // carry over an older job entry
   const setJob = () => { S.job = [S.customer.trim(), S.order.trim() ? "Order #" + S.order.trim() : ""].filter(Boolean).join(" — "); save(); updateHeader(); };
-  txt("#sCust", "customer", setJob); txt("#sOrder", "order", setJob); txt("#sQty", "qty"); setJob();
+  txt("#sCust", "customer", setJob); txt("#sOrder", "order", setJob);
+  $("#sOrder").addEventListener("change", onOrderChange); txt("#sQty", "qty"); setJob();
   // Machine list: edit MACHINES to add or rename machines
   const ms = $("#sMachine"), other = $("#sLine");
   ms.append(el("option", {value:"", text:"Choose a machine…"}));
@@ -626,7 +635,6 @@ function bindSetup(){
     save(); updateHeader();
   }); txt("#sNotes", "notes");
   const sel = (id, key, num) => { const i = $(id); i.value = String(S[key]); i.addEventListener("change", () => { S[key] = num ? Number(i.value) : i.value; save(); }); };
-  if (!["fast","thorough"].includes(S.tier)) S.tier = "fast";
   if (!["fast","thorough"].includes(S.tier)) S.tier = "fast";
   sel("#sTier", "tier"); sel("#sEveryN", "everyN", true);
   const rng = (id, key, out, fmt) => { const i = $(id); i.value = S[key]; const upd = () => { $(out).textContent = fmt(S[key]); };
@@ -648,25 +656,33 @@ function updateHeader(){
 }
 function renderRef(){
   const ph = $("#refPh"); ph.textContent = "";
+  const stale = !!refDataUrl && !refValid();
+  $("#refStale").hidden = !stale; $("#sampleStale").hidden = !stale;
   if (refDataUrl) ph.append(el("img", {src:refDataUrl, alt:"Good sample"})); else ph.textContent = "No sample yet";
   $("#refClear").disabled = !refDataUrl;
 }
 $("#refFromCam").addEventListener("click", () => {
   if (!camOn) { toast("Start the camera in step 3 first."); return; }
-  refDataUrl = grab(900, .8).toDataURL("image/jpeg", .8); store.set("qc.ref", refDataUrl); renderRef(); toast("Good sample saved."); refreshSteps();
+  refDataUrl = grab(900, .8).toDataURL("image/jpeg", .8); setRefOrder(); store.set("qc.ref", refDataUrl); renderRef(); toast("Good sample saved."); refreshSteps();
   savePhoto(grab(1280), "sample", {verdict:"SAMPLE", summary:"Good sample (approved product)", summary_es:"Muestra buena (producto aprobado)"});
 });
 $("#refInput").addEventListener("change", async e => {
   const f = e.target.files[0]; if (!f) return;
-  const c = await fileToCanvas(f, 1280); refDataUrl = c.toDataURL("image/jpeg", .8); store.set("qc.ref", refDataUrl); renderRef(); e.target.value = "";
+  const c = await fileToCanvas(f, 1280); refDataUrl = c.toDataURL("image/jpeg", .8); setRefOrder(); store.set("qc.ref", refDataUrl); renderRef(); refreshSteps(); e.target.value = "";
   savePhoto(c, "sample", {verdict:"SAMPLE", summary:"Good sample (approved product)", summary_es:"Muestra buena (producto aprobado)"});
 });
-$("#refClear").addEventListener("click", () => { refDataUrl = null; store.set("qc.ref", null); renderRef(); });
+$("#refClear").addEventListener("click", () => { refDataUrl = null; store.set("qc.ref", null); renderRef(); refreshSteps(); });
+function setRefOrder(){ refOrder = S.order.trim(); store.set("qc.refOrder", refOrder); }
 
 /* ---------- Camera ---------- */
 const video = $("#video"), overlay = $("#overlay"), octx = overlay.getContext("2d"), stage = $("#stage");
 let stream = null, camOn = false, wakeLock = null, loopTimer = null;
+let starting = false;
 async function startCamera(){
+  if (starting || camOn) return; starting = true;
+  try { await startCameraInner(); } finally { starting = false; }
+}
+async function startCameraInner(){
   ensureAudio();
   $("#camErr").hidden = true;
   try {
@@ -805,7 +821,19 @@ $("#btnZone").addEventListener("click", () => setZoning(!zoning));
 const SW = 160; const sc = document.createElement("canvas"); const sctx = sc.getContext("2d", {willReadFrequently:true});
 let bg = null, prevGray = null, state = "EMPTY", presentN = 0, clearN = 0, settleTimer = null;
 let isArmed = false, busy = false;
-const counts = {captured:0, seen:0, insp:0, pass:0, check:0, fail:0, unclear:0, notInspected:0};
+const ZERO = {captured:0, seen:0, insp:0, pass:0, check:0, fail:0, unclear:0, notInspected:0};
+const savedCounts = store.get("qc.counts", null);
+const counts = Object.assign({}, ZERO, savedCounts && savedCounts.order === (S.order || "").trim() ? savedCounts.c : {});
+let countsOrder = (S.order || "").trim();
+function saveCounts(){ store.set("qc.counts", {order:countsOrder, c:counts}); }
+// a new order number starts a fresh run: zero the counts and flag the good sample
+function onOrderChange(){
+  const o = (S.order || "").trim();
+  if (o === countsOrder) return;
+  const hadRun = counts.seen > 0 || counts.insp > 0;
+  countsOrder = o; Object.assign(counts, ZERO); saveCounts(); renderCounts(); renderRef(); refreshSteps();
+  if (o && (hadRun || refDataUrl)) toast("New order: counts reset. Take a new good sample in Setup step 6.");
+}
 function zoneGray(){
   const vw = video.videoWidth, vh = video.videoHeight; if (!vw) return null;
   const SH = Math.round(SW * vh / vw); if (sc.width !== SW || sc.height !== SH) { sc.width = SW; sc.height = SH; }
@@ -940,9 +968,10 @@ async function runInspection(canvas, source){
   renderLast(entry);
   try {
     if (aiNoKey) { entry.verdict = "CAPTURED"; entry.summary = "Photo captured (test mode, AI not connected yet)."; return; }
+    if (!aiOk) await checkAi();
     if (!aiOk) { entry.verdict = "ERROR"; entry.summary = "AI isn't ready: " + aiPill.textContent + "."; return; }
     const b64 = c => c.toDataURL("image/jpeg", .85).split(",")[1];
-    const payload = {image:b64(canvas), reference: refDataUrl ? refDataUrl.split(",")[1] : "", tier:S.tier === "thorough" ? "thorough" : "fast",
+    const payload = {image:b64(canvas), reference: refValid() ? refDataUrl.split(",")[1] : "", tier:S.tier === "thorough" ? "thorough" : "fast",
       settings:{line:S.line, job:S.customer, checks:S.checks, notes:S.notes}};
     const {result:r} = await api("/api/inspect", {method:"POST", body:JSON.stringify(payload)});
     const v = String(r && r.verdict || "").toUpperCase();
@@ -982,6 +1011,7 @@ function finishEntry(entry){
   else if (entry.verdict === "ERROR") toast(tr(entry.summary));
 }
 function renderCounts(){
+  saveCounts();
   $("#cInsp").textContent = counts.insp; $("#cPass").textContent = counts.pass; $("#cCheck").textContent = counts.check; $("#cFail").textContent = counts.fail;
   $("#countNote").textContent = `Products seen: ${counts.seen} · Not inspected (AI busy): ${counts.notInspected} · Unclear photos: ${counts.unclear}` + (counts.captured ? ` · Test captures: ${counts.captured}` : "");
 }
@@ -1012,7 +1042,7 @@ function renderLog(){
 $("#logFilter").addEventListener("change", renderLog);
 $("#btnClear").addEventListener("click", () => { if (!confirm("Clear the inspection log on this device?")) return; log = []; store.set("qc.log", log); renderLog(); });
 $("#btnExport").addEventListener("click", async () => {
-  const q = v => '"' + String(v ?? "").replace(/"/g, '""') + '"';
+  const q = v => { let s = String(v ?? ""); if (/^[=+\-@]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; };
   const lines = [["Date","Time","Machine","Customer","Order #","Quantity","Result","Summary","Defects","Confidence","Trigger"].join(",")];
   log.slice().reverse().forEach(e => { const d = new Date(e.ts);
     lines.push([d.toLocaleDateString(), d.toLocaleTimeString(), e.line, e.customer ?? e.job, e.order ?? "", e.qty ?? "", e.verdict, e.summary,
@@ -1055,7 +1085,9 @@ async function pollEvents(){
   } catch { showSupOff(true); }
   finally { pollBusy = false; }
 }
-setInterval(() => { if (document.visibilityState === "visible") pollEvents(); }, 5000);
+// machine PCs don't need the supervisor feed: poll only with the Alerts tab open or alarms on
+const alertsWanted = () => supAlarm.checked || $("#v-alerts").classList.contains("on");
+setInterval(() => { if (document.visibilityState === "visible" && alertsWanted()) pollEvents(); }, 5000);
 async function ackEvent(id){ if (!id) return; try { await api("/api/events", {method:"PATCH", body:JSON.stringify({id})}); } catch {} pollEvents(); }
 function renderSup(events){
   const list = $("#supList"); list.textContent = "";
@@ -1126,7 +1158,7 @@ function stepState(){
     st3: camOn,
     st4: !!bg,
     st5: S.checks.length > 0,
-    st6: !!refDataUrl,
+    st6: refValid(),
     st7: true, st8: true
   };
 }
@@ -1242,7 +1274,7 @@ showTab(S.setupDone ? "inspect" : "setup"); refreshSteps();
 if (S.setupDone && S.autoStart && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
   setTimeout(async () => { await startCamera(); if (camOn) setTimeout(() => setArmed(true), 1500); }, 800);
 } else listCameras();
-checkAi(); pollEvents();
+checkAi(); if (alertsWanted()) pollEvents();
 
 if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) $("#photoFallback").hidden = false;
 })();

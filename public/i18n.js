@@ -139,6 +139,11 @@
     "Zone saved. Keep it clear for a few seconds while it learns the empty belt.": "Zona guardada. Manténgala despejada unos segundos mientras aprende la banda vacía.",
     "Camera changed. Keep the yellow box clear for a few seconds while it relearns the belt.": "Cámara cambiada. Mantenga despejado el recuadro amarillo unos segundos mientras vuelve a aprender la banda.",
 
+    "This sample is from a different order. Retake it for this order.": "Esta muestra es de otra orden. Vuelva a tomarla para esta orden.",
+    "The good sample is from a different order, so it isn't being used. Retake it for this order.": "La muestra buena es de otra orden, así que no se está usando. Vuelva a tomarla para esta orden.",
+    "New order: counts reset. Take a new good sample in Setup step 6.": "Orden nueva: conteos reiniciados. Tome una muestra buena nueva en el paso 6 de Configuración.",
+    "The AI took too long.": "La IA tardó demasiado.",
+
     // Photos
     "Photos": "Fotos", "Photo archive": "Archivo de fotos",
     "Up to 5 photos per order: the good sample plus a few products spread through the run (a Fail is always saved first).":

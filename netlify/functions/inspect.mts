@@ -90,15 +90,22 @@ export default async (req: Request, context: Context) => {
   content.push(img(image), { type: "text", text: buildPrompt(body.settings || {}, !!ref) });
 
   let res: Response;
+  // stop before Netlify's function time limit so the page gets a clear "took too long" answer
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 9_500);
   try {
     res = await fetch(`${baseUrl()}/v1/messages`, {
+      signal: ac.signal,
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
       body: JSON.stringify({ model, max_tokens: 900, messages: [{ role: "user", content }] }),
     });
-  } catch {
+  } catch (e: any) {
+    clearTimeout(timer);
+    if (e && e.name === "AbortError") return json({ error: "timeout", message: "The AI took too long." }, 504);
     return json({ error: "upstream", message: "Couldn't reach the AI service." }, 502);
   }
+  clearTimeout(timer);
 
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
