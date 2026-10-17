@@ -181,6 +181,22 @@ nav.tabs .badge.show{display:grid}
 .alarm .ack{background:#fff;color:#8E1616;border:0;font-weight:700;font-size:22px;padding:16px 40px;border-radius:10px;min-height:60px}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(24px + env(safe-area-inset-bottom,0px));z-index:40;background:var(--check);color:#1b1300;padding:12px 18px;border-radius:10px;font-weight:600;max-width:min(92vw,520px);box-shadow:0 6px 20px rgba(0,0,0,.25);display:none}
 .toast.show{display:block}
+/* Feedback */
+.fb{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.fb button{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:6px 10px;font-weight:600;font-size:14px;min-height:36px}
+.fb button.yes{border-color:var(--fail);color:var(--fail)}
+.fb button.no{border-color:var(--pass);color:var(--pass)}
+.fbtag{display:inline-block;font-size:12px;font-weight:700;padding:2px 7px;border-radius:5px;margin-top:4px}
+.fbtag.confirmed{background:var(--fail);color:#fff}
+.fbtag.false{background:var(--pass);color:#fff}
+.fbtag.missed{background:var(--check);color:#1b1300}
+.alarm .acks{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+.alarm .ack.alt{background:transparent;color:#fff;border:3px solid #fff}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:10px}
+.stat{background:var(--panel2);border-radius:8px;padding:8px 10px}
+.stat strong{display:block;font-size:24px;line-height:1.1}
+.stat span{font-size:13px;color:var(--muted)}
+.v-MISSED{color:var(--check)}
 /* Photos */
 .ph-search{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .ph-search input{max-width:260px}
@@ -272,6 +288,7 @@ dialog.big .body{padding:14px;display:grid;gap:6px}
             <button class="btn" id="btnBg" disabled>Relearn empty belt</button>
             <button class="btn" id="btnZone" disabled>Set trigger zone</button>
             <button class="btn" id="btnNow" disabled>Inspect now</button>
+            <button class="btn" id="btnMissed" type="button">AI missed a defect</button>
             <select class="btn" id="camSel" title="Camera" style="width:auto;max-width:260px"><option value="">Default camera</option></select>
           </div>
           <div class="notice bad" id="camErr" hidden></div>
@@ -323,7 +340,7 @@ dialog.big .body{padding:14px;display:grid;gap:6px}
         </div>
 
         <div class="step" id="st2">
-          <div class="step-h"><div class="num"><span>2</span></div><div><h3>Machine and job</h3><div class="sub">Shows on every alarm and in the log.</div></div></div>
+          <div class="step-h"><div class="num"><span>2</span></div><div><h3>Machine and job</h3><div class="sub">Shows on every alarm and in the log. Scan the job ticket barcode at any time to fill in the order.</div></div></div>
           <div class="two">
             <label class="f">Machine
               <select id="sMachine"></select>
@@ -452,12 +469,20 @@ dialog.big .body{padding:14px;display:grid;gap:6px}
 
     <!-- LOG -->
     <section class="view" id="v-log" aria-label="Log">
+      <div class="panel" style="margin-bottom:14px">
+        <div class="row" style="justify-content:space-between">
+          <h2 style="margin:0">Pilot results</h2>
+          <select id="statRange" class="btn sm" style="min-height:36px;width:auto"><option value="7">Last 7 days</option><option value="30">Last 30 days</option></select>
+        </div>
+        <p class="small muted" style="margin:6px 0 0">From the operators' Real defect / False alarm answers on this computer.</p>
+        <div class="stats" id="stats"></div>
+      </div>
       <div class="panel">
         <div class="row" style="justify-content:space-between">
           <h2 style="margin:0">Inspection log</h2>
           <div class="row">
             <select id="logFilter" class="btn sm" style="min-height:36px;width:auto">
-              <option value="all">All results</option><option value="FAIL">Fail</option><option value="CHECK">Check</option><option value="PASS">Pass</option><option value="CAPTURED">Test captures</option><option value="CAPTURED">Test captures</option>
+              <option value="all">All results</option><option value="FAIL">Fail</option><option value="CHECK">Check</option><option value="PASS">Pass</option><option value="MISSED">Missed defects</option><option value="REVIEW">Needs review</option>
             </select>
             <button class="btn sm" id="btnExport">Export CSV</button>
             <button class="btn sm" id="btnClear">Clear log</button>
@@ -488,7 +513,11 @@ dialog.big .body{padding:14px;display:grid;gap:6px}
   <img id="alarmImg" alt="Failed product">
   <ul id="alarmList"></ul>
   <div id="alarmMore" style="font-weight:600"></div>
-  <button class="ack" id="alarmAck">Acknowledge</button>
+  <div class="acks">
+    <button class="ack" id="alarmYes" type="button">Real defect</button>
+    <button class="ack alt" id="alarmNo" type="button">False alarm</button>
+    <button class="ack" id="alarmAck" type="button">Acknowledge</button>
+  </div>
 </div>
 <div class="toast" id="toast" role="status"></div>
 <dialog class="big" id="phDlg">
@@ -618,9 +647,8 @@ function bindSetup(){
   txt("#sLine", "line", updateHeader);
   // Customer + order make up the job label used on alarms, alerts and the log
   if (S.customer === "" && S.order === "" && S.job) S.customer = S.job; // carry over an older job entry
-  const setJob = () => { S.job = [S.customer.trim(), S.order.trim() ? "Order #" + S.order.trim() : ""].filter(Boolean).join(" — "); save(); updateHeader(); };
-  txt("#sCust", "customer", setJob); txt("#sOrder", "order", setJob);
-  $("#sOrder").addEventListener("change", onOrderChange); txt("#sQty", "qty"); setJob();
+  txt("#sCust", "customer", () => { setJob(); queueOrderSave(); }); txt("#sOrder", "order", setJob); txt("#sQty", "qty", queueOrderSave); setJob();
+  $("#sOrder").addEventListener("change", () => { const changed = (S.order || "").trim() !== countsOrder; onOrderChange(); if (changed) fillFromOrder(true); });
   // Machine list: edit MACHINES to add or rename machines
   const ms = $("#sMachine"), other = $("#sLine");
   ms.append(el("option", {value:"", text:"Choose a machine…"}));
@@ -650,6 +678,7 @@ function bindSetup(){
   showManual(); tog("#sSound", "sound"); tog("#sVib", "vibrate"); tog("#sCheckAlarm", "checkAlarm");
   renderRef(); updateHeader();
 }
+function setJob(){ S.job = [S.customer.trim(), S.order.trim() ? "Order #" + S.order.trim() : ""].filter(Boolean).join(" — "); save(); updateHeader(); }
 function updateHeader(){
   const cust = (S.customer || "").trim(), ord = (S.order || "").trim();
   $("#hdrSub").textContent = [S.line || tr("No machine set"), cust, ord ? tr("Order #") + ord : ""].filter(Boolean).join(" — ");
@@ -998,7 +1027,8 @@ async function runInspection(canvas, source){
   }
 }
 function finishEntry(entry){
-  if (["PASS","CHECK","FAIL","UNCLEAR"].includes(entry.verdict)) counts.insp++;
+  if (["PASS","CHECK","FAIL","UNCLEAR"].includes(entry.verdict)) { counts.insp++; bump(entry.ts, "insp"); }
+  if (["CHECK","FAIL"].includes(entry.verdict)) bump(entry.ts, "flagged");
   if (entry.verdict === "CAPTURED") counts.captured++;
   if (entry.verdict === "PASS") counts.pass++;
   if (entry.verdict === "CHECK") counts.check++;
@@ -1026,26 +1056,77 @@ function renderLast(e){
     el("div", {class:"small muted", text:fmtTime(e.ts) + (e.confidence != null ? " · confidence " + e.confidence + "%" : "") + (e.source !== "auto" ? " · " + e.source : "")}),
     el("div", {style:"margin-top:4px", text:sumOf(e)}));
   if (e.defects.length) right.append(defectList(e.defects));
+  const fbb = fbButtons(e); if (fbb) right.append(fbb);
   box.append(el("div", {class:"result"}, el("img", {src:e.thumb, alt:"Inspected product"}), right));
 }
+
+/* ---------- Operator feedback (pilot accuracy) ---------- */
+// Day buckets survive the 150-entry log limit: inspected, flagged (Fail/Check), confirmed, false alarms, missed.
+const dayKey = ts => { const d = new Date(ts); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+let stats = store.get("qc.stats", {});
+function bump(ts, field, n = 1){
+  const k = dayKey(ts); const b = stats[k] || (stats[k] = {insp:0, flagged:0, confirmed:0, falseAlarm:0, missed:0});
+  b[field] = Math.max(0, (b[field] || 0) + n);
+  // keep about 120 days
+  const keys = Object.keys(stats).sort(); while (keys.length > 120) delete stats[keys.shift()];
+  store.set("qc.stats", stats); renderStats();
+}
+function setFeedback(entry, fb){
+  if (!entry || entry.fb === fb) return;
+  const field = {confirmed:"confirmed", false:"falseAlarm"};
+  if (entry.fb) bump(entry.ts, field[entry.fb], -1);
+  entry.fb = fb; bump(entry.ts, field[fb], 1);
+  const i = log.findIndex(e => e.id === entry.id); if (i >= 0) log[i] = entry;
+  store.set("qc.log", log); renderLog(); if (log[0] && log[0].id === entry.id) renderLast(entry);
+}
+function fbButtons(entry){
+  if (!["FAIL","CHECK"].includes(entry.verdict)) return null;
+  if (entry.fb) return el("span", {class:"fbtag " + entry.fb, text:entry.fb === "confirmed" ? "Real defect" : "False alarm"});
+  return el("div", {class:"fb"},
+    el("button", {class:"yes", type:"button", text:"Real defect", onclick:ev => { ev.stopPropagation(); setFeedback(entry, "confirmed"); }}),
+    el("button", {class:"no", type:"button", text:"False alarm", onclick:ev => { ev.stopPropagation(); setFeedback(entry, "false"); }}));
+}
+function renderStats(){
+  const days = Number($("#statRange").value || 7), since = Date.now() - days * 864e5;
+  const t = {insp:0, flagged:0, confirmed:0, falseAlarm:0, missed:0};
+  Object.entries(stats).forEach(([k, b]) => { if (new Date(k + "T23:59:59").getTime() >= since) Object.keys(t).forEach(f => t[f] += b[f] || 0); });
+  const caught = t.confirmed + t.missed ? Math.round(t.confirmed / (t.confirmed + t.missed) * 100) + "%" : "—";
+  const reviewed = t.confirmed + t.falseAlarm;
+  const falseRate = reviewed ? Math.round(t.falseAlarm / reviewed * 100) + "%" : "—";
+  const box = $("#stats"); box.textContent = "";
+  [["Inspected", t.insp], ["Fail / Check", t.flagged], ["Real defects", t.confirmed], ["False alarms", t.falseAlarm],
+   ["Missed defects", t.missed], ["Not yet reviewed", Math.max(0, t.flagged - reviewed)], ["Catch rate", caught], ["False alarm rate", falseRate]]
+    .forEach(([label, v]) => box.append(el("div", {class:"stat"}, el("strong", {text:String(v)}), el("span", {text:label}))));
+}
+$("#statRange").addEventListener("change", renderStats);
+$("#btnMissed").addEventListener("click", () => {
+  if (!confirm("Record that the AI passed a product that was actually bad?")) return;
+  let thumb = "";
+  if (camOn && video.videoWidth) thumb = thumbOf(grab(640));
+  const entry = {id:Date.now().toString(36) + "m", ts:Date.now(), line:S.line, job:S.job, customer:S.customer, order:S.order, qty:S.qty,
+    source:"operator", thumb, verdict:"MISSED", summary:"Operator found a defect the AI passed.", summary_es:"El operador encontró un defecto que la IA pasó.", defects:[], confidence:null};
+  log.unshift(entry); if (log.length > 150) log.length = 150; store.set("qc.log", log); renderLog();
+  bump(entry.ts, "missed");
+  toast("Missed defect recorded. Thank you.");
+});
 
 /* ---------- Log ---------- */
 let log = store.get("qc.log", []);
 function renderLog(){
   const f = $("#logFilter").value, list = $("#logList"); list.textContent = "";
-  const rows = log.filter(e => f === "all" || e.verdict === f);
+  const rows = log.filter(e => f === "all" || (f === "REVIEW" ? ["FAIL","CHECK"].includes(e.verdict) && !e.fb : e.verdict === f));
   if (!rows.length) { list.append(el("div", {class:"empty", text:"No inspections to show."})); return; }
   rows.forEach(e => list.append(el("div", {class:"item"}, el("img", {src:e.thumb, alt:"", loading:"lazy"}),
-    el("div", {}, el("div", {class:"sum", text:sumOf(e)}), el("div", {class:"meta", text:fmtDate(e.ts) + (e.line ? " · " + e.line : "")})),
+    el("div", {}, el("div", {class:"sum", text:sumOf(e)}), el("div", {class:"meta", text:fmtDate(e.ts) + (e.line ? " · " + e.line : "") + (e.order ? " · " + tr("Order #") + e.order : "")}), fbButtons(e)),
     el("div", {class:"v v-" + e.verdict, text:e.verdict}))));
 }
 $("#logFilter").addEventListener("change", renderLog);
 $("#btnClear").addEventListener("click", () => { if (!confirm("Clear the inspection log on this device?")) return; log = []; store.set("qc.log", log); renderLog(); });
 $("#btnExport").addEventListener("click", async () => {
   const q = v => { let s = String(v ?? ""); if (/^[=+\-@]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; };
-  const lines = [["Date","Time","Machine","Customer","Order #","Quantity","Result","Summary","Defects","Confidence","Trigger"].join(",")];
+  const lines = [["Date","Time","Machine","Customer","Order #","Quantity","Result","Operator review","Summary","Defects","Confidence","Trigger"].join(",")];
   log.slice().reverse().forEach(e => { const d = new Date(e.ts);
-    lines.push([d.toLocaleDateString(), d.toLocaleTimeString(), e.line, e.customer ?? e.job, e.order ?? "", e.qty ?? "", e.verdict, e.summary,
+    lines.push([d.toLocaleDateString(), d.toLocaleTimeString(), e.line, e.customer ?? e.job, e.order ?? "", e.qty ?? "", e.verdict, e.fb === "confirmed" ? "Real defect" : e.fb === "false" ? "False alarm" : "", e.summary,
       e.defects.map(x => `${x.check}: ${x.issue} (${x.severity})`).join("; "), e.confidence ?? "", e.source].map(q).join(",")); });
   const url = URL.createObjectURL(new Blob([lines.join("\n")], {type:"text/csv"}));
   const a = el("a", {href:url, download:`qc-log-${new Date().toISOString().slice(0,10)}.csv`}); document.body.append(a); a.click(); a.remove();
@@ -1117,6 +1198,9 @@ function showAlarm(entry, remote){
   const a = $("#alarm");
   if (a.classList.contains("show")) { extraFails++; $("#alarmMore").textContent = `+${extraFails} more since this alarm`; return; }
   currentAlarm = entry; extraFails = 0; $("#alarmMore").textContent = "";
+  // local Fail/Check: the operator answers Real defect / False alarm; remote or camera alarms just get Acknowledge
+  const review = !remote && ["FAIL","CHECK"].includes(entry.verdict) && !entry.test;
+  $("#alarmYes").hidden = !review; $("#alarmNo").hidden = !review; $("#alarmAck").hidden = review;
   a.style.background = entry.verdict === "CHECK" ? "var(--check)" : "";
   $("#alarmImg").hidden = !entry.thumb;
   $("#alarmTitle").textContent = entry.verdict === "CAMERA" ? "CAMERA OFF" : entry.verdict;
@@ -1128,14 +1212,18 @@ function showAlarm(entry, remote){
   a.classList.add("show"); if (entry.verdict === "FAIL" || entry.verdict === "CAMERA") a.classList.add("pulse");
   if (S.vibrate && navigator.vibrate) navigator.vibrate([400, 150, 400, 150, 400]);
   if (S.sound || remote) { siren(); clearInterval(alarmTimer); alarmTimer = setInterval(siren, 1400); }
-  $("#alarmAck").focus();
+  ($("#alarmAck").hidden ? $("#alarmYes") : $("#alarmAck")).focus();
 }
-$("#alarmAck").addEventListener("click", async () => {
+function closeAlarm(fb){
   $("#alarm").classList.remove("show", "pulse"); clearInterval(alarmTimer);
   if (navigator.vibrate) navigator.vibrate(0);
-  const id = currentAlarm && currentAlarm.eventId; currentAlarm = null;
-  if (id) ackEvent(id);
-});
+  const entry = currentAlarm; currentAlarm = null;
+  if (entry && fb) setFeedback(entry, fb);
+  if (entry && entry.eventId) ackEvent(entry.eventId);
+}
+$("#alarmAck").addEventListener("click", () => closeAlarm(null));
+$("#alarmYes").addEventListener("click", () => closeAlarm("confirmed"));
+$("#alarmNo").addEventListener("click", () => closeAlarm("false"));
 let toastTimer = null;
 function toast(msg){ const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 5000); }
 
@@ -1145,10 +1233,80 @@ $("#btnTestAlarm").addEventListener("click", () => {
   if (camOn) c = grab(640);
   else { c = document.createElement("canvas"); c.width = 320; c.height = 180; const x = c.getContext("2d");
     x.fillStyle = "#00694b"; x.fillRect(0, 0, 320, 180); x.fillStyle = "#fff"; x.font = "bold 40px 'Segoe UI', sans-serif"; x.textAlign = "center"; x.fillText("TEST", 160, 105); }
-  const entry = {ts:Date.now(), line:S.line, job:S.job, verdict:"FAIL", thumb:thumbOf(c),
+  const entry = {test:true, ts:Date.now(), line:S.line, job:S.job, verdict:"FAIL", thumb:thumbOf(c),
     summary:"TEST ALARM — not a real defect.", defects:[{check:"Test", issue:"Alarm test from Setup", severity:"minor"}]};
   showAlarm(entry); pushEvent(entry);
 });
+
+/* ---------- Order details shared by all machines ---------- */
+let orderSaveTimer = null;
+function queueOrderSave(){
+  clearTimeout(orderSaveTimer);
+  orderSaveTimer = setTimeout(() => {
+    const order = (S.order || "").trim(); if (!order || !accessCode) return;
+    api("/api/orders", {method:"POST", body:JSON.stringify({order, customer:S.customer, qty:S.qty})}).catch(() => {});
+  }, 1500);
+}
+// look up this order's customer and quantity from another machine; overwrite=true replaces what's in the fields
+async function fillFromOrder(overwrite){
+  const order = (S.order || "").trim(); if (!order || !accessCode) return false;
+  try {
+    const d = await api("/api/orders?order=" + encodeURIComponent(order));
+    if (S.order.trim() !== order) return false;           // order changed again while we waited
+    let filled = false;
+    if (d.customer && (overwrite || !S.customer.trim())) { S.customer = d.customer; $("#sCust").value = d.customer; filled = true; }
+    if (d.qty && (overwrite || !String(S.qty).trim())) { S.qty = d.qty; $("#sQty").value = d.qty; filled = true; }
+    if (filled) { setJob(); save(); refreshSteps(); }
+    return !!(d.customer || d.qty);
+  } catch { return false; }
+}
+function setOrderFields(order, cust, qty){
+  const changed = order !== (S.order || "").trim();
+  S.order = order; $("#sOrder").value = order;
+  if (changed) { S.customer = ""; S.qty = ""; }      // details of the old order don't belong to the new one
+  if (cust) S.customer = cust;
+  if (qty) S.qty = qty;
+  $("#sCust").value = S.customer; $("#sQty").value = S.qty;
+  setJob(); save(); onOrderChange(); refreshSteps();
+}
+
+/* ---------- Barcode scanner ---------- */
+// A USB scanner types the barcode very fast and ends with Enter (or Tab). Anything typed that fast
+// is treated as a scanned job ticket, wherever the cursor is. A barcode may hold just the order
+// number, or "order|customer|quantity" (separated by | ; or Tab).
+let scan = null;
+document.addEventListener("keydown", e => {
+  if (e.ctrlKey || e.altKey || e.metaKey) return;
+  const now = performance.now();
+  if (e.key === "Enter" || e.key === "Tab") {
+    const s = scan; scan = null;
+    if (s && s.chars.length >= 4 && now - s.last < 100 && (s.last - s.first) / (s.chars.length - 1) < 35) {
+      e.preventDefault(); e.stopPropagation();
+      const t = s.target;
+      // undo the characters the scanner typed into whatever field had the cursor
+      if (t && t.tagName === "INPUT" && t.type === "text") { t.value = s.before; t.dispatchEvent(new Event("input", {bubbles:true})); }
+      applyScan(s.chars.join(""));
+    }
+    return;
+  }
+  if (e.key.length !== 1) return;
+  if (!scan || now - scan.last > 80) {
+    const t = document.activeElement;
+    scan = {chars:[], first:now, last:now, target:t, before:t && t.tagName === "INPUT" ? t.value : ""};
+  }
+  scan.chars.push(e.key); scan.last = now;
+}, true);
+async function applyScan(raw){
+  const parts = raw.split(/[|;\t]/).map(x => x.trim()).filter(Boolean);
+  if (!parts.length) return;
+  const order = parts[0].slice(0, 40); let cust = "", qty = "";
+  parts.slice(1).forEach(x => { if (!qty && /^[\d,]+$/.test(x)) qty = x.replace(/,/g, ""); else if (!cust) cust = x; });
+  setOrderFields(order, cust, qty);
+  if (!(cust && qty)) await fillFromOrder(false);
+  queueOrderSave();
+  if (S.customer.trim()) toast(tr(`Order ${order} scanned.`) + (refValid() ? "" : " " + tr("Take a new good sample in Setup step 6.")));
+  else { toast(tr(`Order ${order} scanned. Enter the customer and quantity in Setup step 2.`)); showTab("setup"); $("#sCust").focus(); }
+}
 
 /* ---------- Setup steps ---------- */
 function stepState(){
@@ -1269,7 +1427,7 @@ $("#themeBtn").addEventListener("click", () => {
 
 /* ---------- Boot ---------- */
 I18N.applyLang();
-bindSetup(); renderCounts(); renderLog(); setChip("Idle", "");
+bindSetup(); renderCounts(); renderLog(); renderStats(); setChip("Idle", "");
 showTab(S.setupDone ? "inspect" : "setup"); refreshSteps();
 if (S.setupDone && S.autoStart && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
   setTimeout(async () => { await startCamera(); if (camOn) setTimeout(() => setArmed(true), 1500); }, 800);

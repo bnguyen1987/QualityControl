@@ -144,6 +144,20 @@
     "New order: counts reset. Take a new good sample in Setup step 6.": "Orden nueva: conteos reiniciados. Tome una muestra buena nueva en el paso 6 de Configuración.",
     "The AI took too long.": "La IA tardó demasiado.",
 
+    // Feedback, pilot results, scanner
+    "Real defect": "Defecto real", "False alarm": "Falsa alarma", "AI missed a defect": "La IA no vio un defecto",
+    "Record that the AI passed a product that was actually bad?": "¿Registrar que la IA pasó un producto que en realidad estaba malo?",
+    "Missed defect recorded. Thank you.": "Defecto no detectado registrado. Gracias.",
+    "Operator found a defect the AI passed.": "El operador encontró un defecto que la IA pasó.",
+    "MISSED": "NO DETECTADO", "Missed defects": "Defectos no detectados", "Needs review": "Por revisar",
+    "Pilot results": "Resultados de la prueba", "Last 7 days": "Últimos 7 días", "Last 30 days": "Últimos 30 días",
+    "From the operators' Real defect / False alarm answers on this computer.": "Según las respuestas de Defecto real / Falsa alarma de los operadores en esta computadora.",
+    "Fail / Check": "Falla / Revisar", "Real defects": "Defectos reales", "False alarms": "Falsas alarmas",
+    "Not yet reviewed": "Sin revisar", "Catch rate": "Tasa de detección", "False alarm rate": "Tasa de falsas alarmas",
+    "Shows on every alarm and in the log. Scan the job ticket barcode at any time to fill in the order.":
+      "Aparece en cada alarma y en el registro. Escanee el código de barras del ticket del trabajo en cualquier momento para llenar la orden.",
+    "Take a new good sample in Setup step 6.": "Tome una muestra buena nueva en el paso 6 de Configuración.",
+
     // Photos
     "Photos": "Fotos", "Photo archive": "Archivo de fotos",
     "Up to 5 photos per order: the good sample plus a few products spread through the run (a Fail is always saved first).":
@@ -191,6 +205,8 @@
     [/^(.*) · confidence (\d+)%(.*)$/, (m, a, n, b) => `${a} · confianza ${n}%${b}`],
     [/^Calibrating: (\d+) of (\d+) products seen\.$/, (m, a, b) => `Calibrando: ${a} de ${b} productos vistos.`],
     [/^(\d+) photos$/, (m, n) => `${n} fotos`],
+    [/^Order (.+) scanned\.$/, (m, o) => `Orden ${o} escaneada.`],
+    [/^Order (.+) scanned\. Enter the customer and quantity in Setup step 2\.$/, (m, o) => `Orden ${o} escaneada. Ingrese el cliente y la cantidad en el paso 2 de Configuración.`],
     [/^Check: (.*)$/, (m, s) => "Revisar: " + s],
     [/^Camera (\d+)$/, (m, n) => "Cámara " + n],
     [/^This window was hidden for about (\d+) min, so some products may have been missed\. Keep Line QC visible, or start it with the Line QC shortcut\.$/,
