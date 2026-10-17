@@ -425,7 +425,7 @@ dialog.big .body{padding:14px;display:grid;gap:6px}
 
     <!-- PHOTOS -->
     <section class="view" id="v-photos" aria-label="Photos">
-      <div class="page-head"><h1>Photo archive</h1><p>Photos saved by order number: the good sample, the first product, every Fail and Check, and a Pass photo every 30 minutes.</p></div>
+      <div class="page-head"><h1>Photo archive</h1><p>Up to 5 photos per order: the good sample plus a few products spread through the run (a Fail is always saved first).</p></div>
       <div class="panel">
         <form class="ph-search" id="phForm">
           <input type="text" id="phOrder" placeholder="Order #" autocomplete="off" inputmode="numeric">
@@ -1066,21 +1066,20 @@ $("#btnFinish").addEventListener("click", () => {
 });
 
 /* ---------- Photo archive ---------- */
-// Which inspection photos get kept: first product of each order, every Fail/Check, a Pass every 30 min.
-const PASS_EVERY_MS = 30 * 60 * 1000;
-let arch = store.get("qc.arch", {order:"", lastPass:0});
+// Keep only a handful of photos per order: the good sample (saved from Setup) plus up to
+// MAX_PER_ORDER product photos spread through the run — the first product, then one every
+// SPACING_MS. A Fail is saved right away if the order hasn't used up its photos yet.
+const MAX_PER_ORDER = 4, SPACING_MS = 20 * 60 * 1000;
+let arch = store.get("qc.arch", {order:"", count:0, last:0});
 function archivePhoto(canvas, entry){
-  if (!S.order.trim() || !["PASS","CHECK","FAIL","UNCLEAR"].includes(entry.verdict)) return;
-  if (arch.order !== S.order.trim()) arch = {order:S.order.trim(), lastPass:0, first:false};
-  let kind = null;
-  if (entry.verdict === "FAIL") kind = "fail";
-  else if (entry.verdict === "CHECK") kind = "check";
-  else if (!arch.first) kind = "first";
-  else if (entry.verdict === "PASS" && Date.now() - arch.lastPass >= PASS_EVERY_MS) kind = "pass";
-  arch.first = true;
-  if (!kind) return;
-  if (entry.verdict === "PASS") arch.lastPass = Date.now();
-  store.set("qc.arch", arch);
+  const order = S.order.trim();
+  if (!order || !["PASS","CHECK","FAIL"].includes(entry.verdict)) return;
+  if (arch.order !== order) arch = {order, count:0, last:0};
+  if (arch.count >= MAX_PER_ORDER) return;
+  const due = arch.count === 0 || Date.now() - arch.last >= SPACING_MS;
+  if (!due && entry.verdict !== "FAIL") return;
+  const kind = entry.verdict === "FAIL" ? "fail" : entry.verdict === "CHECK" ? "check" : arch.count === 0 ? "first" : "pass";
+  arch.count++; arch.last = Date.now(); store.set("qc.arch", arch);
   savePhoto(canvas, kind, entry);
 }
 async function savePhoto(canvas, kind, info){

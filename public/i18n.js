@@ -126,8 +126,8 @@
 
     // Photos
     "Photos": "Fotos", "Photo archive": "Archivo de fotos",
-    "Photos saved by order number: the good sample, the first product, every Fail and Check, and a Pass photo every 30 minutes.":
-      "Fotos guardadas por número de orden: la muestra buena, el primer producto, cada Falla y Revisar, y una foto de Pasa cada 30 minutos.",
+    "Up to 5 photos per order: the good sample plus a few products spread through the run (a Fail is always saved first).":
+      "Hasta 5 fotos por orden: la muestra buena y algunos productos repartidos durante la corrida (una Falla siempre se guarda primero).",
     "Look up": "Buscar", "Recent orders": "Órdenes recientes", "Loading…": "Cargando…",
     "Enter the access code in Setup first.": "Primero ingrese el código de acceso en Configuración.",
     "No photos saved yet.": "Todavía no hay fotos guardadas.", "No photos saved for this order.": "No hay fotos guardadas para esta orden.",
