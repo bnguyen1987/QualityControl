@@ -98,10 +98,11 @@ export default async (req: Request, context: Context) => {
     { type: "text", text: `OK EXAMPLE ${i + 1} (operator confirmed this product is good; it had been flagged for: ${String(x.note || "").slice(0, 200)}):` }, img(x.image)));
   content.push({ type: "text", text: "PRODUCT TO INSPECT:" }, img(image), { type: "text", text: buildPrompt(body.settings || {}, !!ref, ok.length) });
 
-  let res: Response;
-  // stop before Netlify's function time limit so the page gets a clear "took too long" answer
+  // Give up with a clear "took too long" answer instead of hanging: 12 s in Fast mode, 25 s in Thorough.
+  // The limit covers the whole exchange, including reading the reply.
   const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), 9_500);
+  const timer = setTimeout(() => ac.abort(), tier === "thorough" ? 25_000 : 12_000);
+  let res: Response, raw = "";
   try {
     res = await fetch(`${baseUrl()}/v1/messages`, {
       signal: ac.signal,
@@ -109,22 +110,24 @@ export default async (req: Request, context: Context) => {
       headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
       body: JSON.stringify({ model, max_tokens: 900, messages: [{ role: "user", content }] }),
     });
+    raw = await res.text();
   } catch (e: any) {
-    clearTimeout(timer);
     if (e && e.name === "AbortError") return json({ error: "timeout", message: "The AI took too long." }, 504);
     return json({ error: "upstream", message: "Couldn't reach the AI service." }, 502);
+  } finally {
+    clearTimeout(timer);
   }
-  clearTimeout(timer);
 
   if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    const low = /credit balance/i.test(detail);
+    const low = /credit balance/i.test(raw);
     const code = low ? "no_credit" : res.status === 429 ? "rate_limited" : res.status === 401 || res.status === 403 ? "bad_key" : "upstream";
-    console.log("Anthropic error", res.status, detail.slice(0, 500));
-    return json({ error: code, message: `AI service returned ${res.status}.`, detail: detail.slice(0, 300) }, code === "rate_limited" ? 429 : 502);
+    console.log("AI service error", res.status, raw.slice(0, 500));
+    return json({ error: code, message: `AI service returned ${res.status}.`, detail: raw.slice(0, 300) }, code === "rate_limited" ? 429 : 502);
   }
 
-  const data: any = await res.json();
+  let data: any = null;
+  try { data = JSON.parse(raw); } catch {}
+  if (!data) return json({ error: "invalid_json", message: "AI reply couldn't be read." }, 502);
   const text = (data.content || []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("\n");
   const result = parseJson(text);
   if (!result) return json({ error: "invalid_json", message: "AI reply couldn't be read." }, 502);

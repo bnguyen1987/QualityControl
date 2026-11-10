@@ -181,6 +181,7 @@ nav.tabs .badge.show{display:grid}
 .alarm .ack{background:#fff;color:#8E1616;border:0;font-weight:700;font-size:22px;padding:16px 40px;border-radius:10px;min-height:60px}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(24px + env(safe-area-inset-bottom,0px));z-index:40;background:var(--check);color:#1b1300;padding:12px 18px;border-radius:10px;font-weight:600;max-width:min(92vw,520px);box-shadow:0 6px 20px rgba(0,0,0,.25);display:none}
 .toast.show{display:block}
+.toast-btn{margin-left:12px;border:2px solid currentColor;background:transparent;color:inherit;font-weight:700;border-radius:6px;padding:3px 10px;min-height:32px}
 /* Feedback */
 .fb{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .fb button{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:6px 10px;font-weight:600;font-size:14px;min-height:36px}
@@ -590,9 +591,17 @@ let accessCode = store.get("qc.code", "");
 let aiOk = false, aiNoKey = false;
 const aiPill = $("#aiPill");
 function setAi(state, text){ aiPill.className = "ai-pill " + state; aiPill.textContent = text; }
+// Every request has a time limit, so a hung connection can never leave the page waiting forever.
 async function api(path, opts = {}){
-  const res = await fetch(path, {...opts, headers:{"content-type":"application/json", "x-access-code":accessCode, ...(opts.headers || {})}});
-  let body = null; try { body = await res.json(); } catch {}
+  const {timeout = 20000, ...rest} = opts;
+  const ac = new AbortController(), timer = setTimeout(() => ac.abort(), timeout);
+  let res, body = null;
+  try {
+    res = await fetch(path, {...rest, signal:ac.signal, headers:{"content-type":"application/json", "x-access-code":accessCode, ...(rest.headers || {})}});
+    try { body = await res.json(); } catch {}
+  } catch (e) {
+    throw Object.assign(new Error(e && e.name === "AbortError" ? "timeout" : "network"), {code:e && e.name === "AbortError" ? "timeout" : "network"});
+  } finally { clearTimeout(timer); }
   if (!res.ok) {
     let detail = "";
     try { const d = JSON.parse(body && body.detail || "{}"); detail = d.error && (d.error.type + ": " + d.error.message) || ""; } catch {}
@@ -707,11 +716,13 @@ function setRefOrder(){ refOrder = S.order.trim(); store.set("qc.refOrder", refO
 const video = $("#video"), overlay = $("#overlay"), octx = overlay.getContext("2d"), stage = $("#stage");
 let stream = null, camOn = false, wakeLock = null, loopTimer = null;
 let starting = false;
-async function startCamera(){
+// manual = a person clicked Start. Only then may it fall back to another camera when the saved
+// one is missing; when starting by itself it waits for the right camera instead.
+async function startCamera(manual){
   if (starting || camOn) return; starting = true;
-  try { await startCameraInner(); } finally { starting = false; }
+  try { await startCameraInner(!!manual); } finally { starting = false; }
 }
-async function startCameraInner(){
+async function startCameraInner(manual){
   ensureAudio();
   $("#camErr").hidden = true;
   try {
@@ -720,12 +731,16 @@ async function startCameraInner(){
     try {
       stream = await navigator.mediaDevices.getUserMedia({audio:false, video: S.camId ? {...want, deviceId:{exact:S.camId}} : {...want, facingMode:{ideal:"environment"}}});
     } catch (err) {
-      if (!S.camId || !["NotFoundError","OverconstrainedError"].includes(err && err.name)) throw err;
+      if (!S.camId || !manual || !["NotFoundError","OverconstrainedError"].includes(err && err.name)) throw err;
       // saved camera is unplugged: fall back to any camera and tell the operator
       toast("The selected camera wasn't found. Using the default camera — check the USB cable.");
       stream = await navigator.mediaDevices.getUserMedia({audio:false, video:want});
     }
-    stream.getVideoTracks()[0].addEventListener("ended", onCamLost);
+    const track = stream.getVideoTracks()[0];
+    track.addEventListener("ended", onCamLost);
+    // remember which camera this PC uses, so a second camera plugged in later can't take its place
+    const usedId = track.getSettings().deviceId;
+    if (usedId && !S.camId) { S.camId = usedId; save(); }
     listCameras();
     video.srcObject = stream; await video.play();
     camOn = true; $("#stageEmpty").hidden = true; $("#meter").hidden = false; $("#photoFallback").hidden = true;
@@ -745,7 +760,7 @@ async function startCameraInner(){
     clearInterval(loopTimer); loopTimer = setInterval(tick, TICK_MS);
   } catch (e) {
     const msg = e && e.name === "NotAllowedError" ? "Camera permission was blocked. Allow camera access for this page, then try again."
-      : e && e.name === "NotFoundError" ? "No camera was found on this device."
+      : e && ["NotFoundError","OverconstrainedError"].includes(e.name) ? "The camera wasn't found. Check that it is plugged in."
       : "The live camera couldn't start in this view.";
     const n = $("#camErr"); n.textContent = msg; n.hidden = false; $("#photoFallback").hidden = false;
   }
@@ -759,7 +774,7 @@ function stopCamera(){
   $("#btnCam").textContent = "Start camera"; $("#btnCam").className = "btn primary";
   setChip("Idle", ""); releaseWake(); drawOverlay();
 }
-$("#btnCam").addEventListener("click", () => { clearInterval(camRetry); camOn ? stopCamera() : startCamera(); });
+$("#btnCam").addEventListener("click", () => { clearInterval(camRetry); camRetry = null; camOn ? stopCamera() : startCamera(true); });
 async function listCameras(){
   try {
     const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "videoinput");
@@ -772,19 +787,30 @@ async function listCameras(){
 }
 $("#camSel").addEventListener("change", async e => {
   S.camId = e.target.value; save(); resetTrigger(); store.set("qc.refCrop", false); renderRef();
-  if (camOn) { const armed = isArmed; stopCamera(); await startCamera(); if (armed && camOn) setArmed(true); }
+  if (camOn) { const armed = isArmed; stopCamera(); await startCamera(true); if (armed && camOn) setArmed(true); }
   toast("Camera changed. Keep the yellow box clear for a few seconds while it relearns the belt.");
 });
 // USB camera unplugged or lost while running: alarm and keep retrying
 let camRetry = null;
 function onCamLost(){
   if (!camOn) return;
-  const wasArmed = isArmed; stopCamera();
-  showAlarm({verdict:"CAMERA", ts:Date.now(), line:S.line, job:S.job, thumb:"", summary:"Camera disconnected. Check the USB cable. Inspection will resume when the camera is back.", defects:[]});
-  clearInterval(camRetry);
+  const wasArmed = isArmed; stopCamera(); retryCamera(wasArmed, true);
+}
+// Try the camera again every 5 s until it is back. alarmNow: sound the alarm right away (camera was
+// running and dropped out); otherwise give it about 20 s first (PC just booted, USB still waking up).
+function retryCamera(wasArmed, alarmNow){
+  clearInterval(camRetry); let tries = 0, alarmed = false;
+  const alarm = () => { if (alarmed) return; alarmed = true;
+    showAlarm({verdict:"CAMERA", ts:Date.now(), line:S.line, job:S.job, thumb:"", summary:"Camera disconnected. Check the USB cable. Inspection will resume when the camera is back.", defects:[]}); };
+  if (alarmNow) alarm();
   camRetry = setInterval(async () => {
-    await startCamera();
-    if (camOn) { clearInterval(camRetry); if (wasArmed) setArmed(true); toast("Camera reconnected. Inspection resumed."); }
+    await startCamera(false);
+    if (camOn) {
+      clearInterval(camRetry); camRetry = null;
+      if (currentAlarm && currentAlarm.verdict === "CAMERA") closeAlarm(null);   // no need to keep the siren going
+      if (wasArmed) setTimeout(() => { if (camOn && !isArmed) setArmed(true); }, 1500);
+      toast(wasArmed ? "Camera reconnected. Inspection resumed." : "Camera connected.");
+    } else if (++tries >= 4) alarm();
   }, 5000);
 }
 if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener("devicechange", listCameras);
@@ -800,11 +826,6 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
-function grab(maxW, q){
-  const w = video.videoWidth, h = video.videoHeight, s = Math.min(1, maxW / w);
-  const c = document.createElement("canvas"); c.width = Math.round(w * s); c.height = Math.round(h * s);
-  c.getContext("2d").drawImage(video, 0, 0, c.width, c.height); return c;
-}
 // Close-up of the trigger zone (plus a small margin) at full camera resolution, scaled down to maxW.
 // The AI sees the product instead of belt and background.
 const CROP_MARGIN = 0.06;
@@ -827,10 +848,8 @@ function fileToCanvas(file, maxW){
     img.src = url;
   });
 }
-const toBlob = (c, q = .85) => new Promise(r => c.toBlob(r, "image/jpeg", q));
 function thumbOf(c){ const t = document.createElement("canvas"); const s = 200 / c.width; t.width = 200; t.height = Math.round(c.height * s);
   t.getContext("2d").drawImage(c, 0, 0, t.width, t.height); return t.toDataURL("image/jpeg", .6); }
-async function dataUrlToBlob(u){ return (await fetch(u)).blob(); }
 
 /* ---------- Trigger zone ---------- */
 let zoning = false, dragStart = null;
@@ -891,6 +910,10 @@ const AUTO = () => S.autoTrig !== false;
 // cal: what the camera learned about this belt — how much the empty belt flickers on its own (noise)
 // and how strong a real product looks (peaks of recent products). Thresholds sit between the two.
 let cal = store.get("qc.cal", null), learn = null, curPeak = 0, settleHist = [], stateSince = Date.now();
+// bgPrev: the background in use before the last automatic relearn. If the picture goes back to it,
+// the relearn was wrong (a product had stopped under the camera) and bgPrev is put back.
+let bgPrev = null, prevN = 0, stillN = 0, armCheck = false, skipPeak = false;
+const saveBg = () => store.set("qc.bg", bg ? Array.from(bg, v => Math.round(v)) : null);
 const CAL_PRODUCTS = 5;
 function thresholds(){
   if (!AUTO()) { const t = 40 - S.sens * 3.1; return {on:t, off:t * .6}; }
@@ -904,8 +927,8 @@ function thresholds(){
   return {on, off:n + (on - n) * .5};
 }
 function saveCal(){ store.set("qc.cal", cal); }
-function resetTrigger(){ bg = null; prevGray = null; cal = null; learn = null; store.set("qc.bg", null); store.set("qc.cal", null); state = "EMPTY"; presentN = clearN = 0; }
-function beginLearn(){ bg = null; learn = {frames:[], started:Date.now()}; state = "EMPTY"; presentN = clearN = 0; refreshTrigStatus(); }
+function resetTrigger(){ bg = null; bgPrev = null; prevGray = null; cal = null; learn = null; store.set("qc.bg", null); store.set("qc.cal", null); state = "EMPTY"; presentN = clearN = 0; }
+function beginLearn(){ bg = null; bgPrev = null; learn = {frames:[], started:Date.now()}; state = "EMPTY"; presentN = clearN = 0; refreshTrigStatus(); }
 $("#btnBg").addEventListener("click", () => { cal = null; beginLearn(); toast("Keep the yellow box clear for a few seconds."); });
 
 // learn the empty belt: wait for ~1.5 s of a still picture, average it, and measure its flicker
@@ -918,7 +941,7 @@ function learnStep(g, motion){
   let noise = 0; fr.forEach(f => { noise = Math.max(noise, meanDiff(f, avg)); });
   bg = avg; learn = null;
   cal = {noise:Math.max(noise * 1.3, 0.8), peaks:(cal && cal.peaks) || []}; saveCal();
-  store.set("qc.bg", Array.from(bg, v => Math.round(v)));
+  saveBg();
   toast("Empty belt learned."); refreshTrigStatus(); refreshSteps();
 }
 function trigStatusText(){
@@ -927,6 +950,7 @@ function trigStatusText(){
     ? "Waiting for the belt to be still and the yellow box to be clear…"
     : "Learning the empty belt… keep the yellow box clear.";
   if (!bg) return "Empty belt not learned yet.";
+  if (isArmed && state === "WAIT_CLEAR" && Date.now() - stateSince > 90000) return "Waiting for the yellow box to clear. If it is already clear, click Relearn empty belt.";
   if (AUTO() && (!cal || cal.peaks.length < CAL_PRODUCTS)) return `Calibrating: ${cal ? cal.peaks.length : 0} of ${CAL_PRODUCTS} products seen.`;
   return "Trigger ready.";
 }
@@ -949,11 +973,25 @@ function tick(){
   $("#meterFill").style.width = Math.min(100, level / (on * 2) * 100) + "%";
   refreshTrigStatus();
   if (!isArmed) return;
+  const now = Date.now();
+  const waiting = () => { state = "EMPTY"; presentN = 0; if (!busy) setChip("Waiting for product", ""); };
+  const hold = () => { state = "WAIT_CLEAR"; stateSince = now; clearN = 0; stillN = 0; skipPeak = true; if (!busy) setChip("Product leaving", ""); };
+  // just switched on with something already in the zone (or an out-of-date belt picture): wait for it
+  // to clear instead of photographing it
+  if (armCheck) { armCheck = false; if (bg && level > on) { hold(); return; } }
+  // the picture matches the earlier background again: that one was right all along
+  if (bgPrev) {
+    prevN = bgPrev.length === g.length && meanDiff(g, bgPrev) < off ? prevN + 1 : 0;
+    if (prevN >= 6) { bg = bgPrev; bgPrev = null; prevN = 0; saveBg(); waiting(); return; }
+  }
   if (state === "EMPTY") {
     if (bg && level < on * .5) for (let i = 0; i < bg.length; i++) bg[i] = bg[i] * .97 + g[i] * .03; // follow slow lighting changes
     presentN = level > on ? presentN + 1 : 0;
     if (presentN >= 2) {
-      state = "SETTLING"; stateSince = Date.now(); curPeak = level; settleHist = [level]; setChip("Product in view", "live");
+      // right after an automatic relearn it isn't certain which background is right, so the first
+      // thing that moves is watched, not photographed
+      if (bgPrev) { hold(); return; }
+      state = "SETTLING"; stateSince = now; curPeak = level; settleHist = [level]; setChip("Product in view", "live");
       if (!AUTO()) settleTimer = setTimeout(onProduct, S.settle);
     }
   } else if (state === "SETTLING") {
@@ -963,31 +1001,35 @@ function tick(){
       settleHist.push(level);
       const n = settleHist.length, prevMax = Math.max(...settleHist.slice(Math.max(0, n - 4), n - 1));
       const stopped = n >= 3 && level <= prevMax * 1.03;
-      if (stopped || Date.now() - stateSince > 1500) onProduct();
+      if (stopped || now - stateSince > 1500) onProduct();
     }
   } else if (state === "WAIT_CLEAR") {
     curPeak = Math.max(curPeak, level);
     clearN = level < off ? clearN + 1 : 0;
+    stillN = motion < 2.5 ? stillN + 1 : 0;
     if (clearN >= 6) {
-      if (AUTO() && cal && curPeak > 0) { cal.peaks.push(curPeak); if (cal.peaks.length > 15) cal.peaks.shift(); saveCal(); }
-      state = "EMPTY"; presentN = 0; if (!busy) setChip("Waiting for product", "");
-    } else if (AUTO() && Date.now() - stateSince > 20000 && motion < 2.5) {
-      // nothing moved for 20 s but the zone still looks "full" (belt stopped, lighting changed): relearn the belt
-      bg = Float32Array.from(g); store.set("qc.bg", Array.from(bg, v => Math.round(v)));
-      state = "EMPTY"; presentN = 0; if (!busy) setChip("Waiting for product", "");
+      if (AUTO() && cal && curPeak > 0 && !skipPeak) { cal.peaks.push(curPeak); if (cal.peaks.length > 15) cal.peaks.shift(); saveCal(); }
+      skipPeak = false; bgPrev = null;      // came and went against this background: it is the right one
+      waiting();
+    } else if (now - stateSince > 20000 && stillN >= 20) {
+      // the zone has looked "full" for 20 s and nothing is moving: either the light changed, or a
+      // product is stopped under the camera. Use this picture as the belt for now, but keep the old
+      // one (bgPrev) so it comes back by itself if this was a stopped product.
+      bgPrev = bg; prevN = 0; bg = Float32Array.from(g); saveBg(); skipPeak = false;
+      waiting();
     }
   }
 }
 function onProduct(){
   if (!isArmed) return;
   if (state !== "SETTLING") return;
-  state = "WAIT_CLEAR"; stateSince = Date.now(); clearN = 0; counts.seen++; zoneFlash = 4; drawOverlay();
+  state = "WAIT_CLEAR"; stateSince = Date.now(); clearN = 0; stillN = 0; skipPeak = false; counts.seen++; zoneFlash = 4; drawOverlay();
   if (counts.seen % S.everyN !== 0) { renderCounts(); return; }
   if (busy) { counts.notInspected++; renderCounts(); return; }
   const c = grabZone(1280); runInspection(c, "auto");
 }
 function setArmed(on){
-  isArmed = on; clearTimeout(settleTimer); state = "EMPTY"; presentN = clearN = 0;
+  isArmed = on; clearTimeout(settleTimer); state = "EMPTY"; presentN = clearN = 0; armCheck = on;
   const b = $("#btnArm"); b.textContent = on ? "Pause inspecting" : "Start inspecting"; b.className = "btn grow " + (on ? "stop" : "go");
   setChip(on ? "Waiting for product" : (camOn ? "Paused" : "Idle"), on ? "" : "warn");
 }
@@ -1016,7 +1058,7 @@ async function runInspection(canvas, source){
     const payload = {image:b64(canvas), reference: refValid() ? refDataUrl.split(",")[1] : "", tier:S.tier === "thorough" ? "thorough" : "fast",
       settings:{line:S.line, job:S.customer, checks:S.checks, notes:S.notes},
       okExamples:okExamplesFor(S.order).map(x => ({image:x.img.split(",")[1], note:x.note}))};
-    const {result:r} = await api("/api/inspect", {method:"POST", body:JSON.stringify(payload)});
+    const {result:r} = await api("/api/inspect", {method:"POST", body:JSON.stringify(payload), timeout:32000});
     const v = String(r && r.verdict || "").toUpperCase();
     entry.verdict = ["PASS","CHECK","FAIL","UNCLEAR"].includes(v) ? v : "CHECK";
     entry.summary = String(r && r.summary || "").slice(0, 300) || (entry.verdict === "PASS" ? "No issues seen." : "See details.");
@@ -1030,8 +1072,9 @@ async function runInspection(canvas, source){
     else if (e.code === "no_credit") { entry.summary = "The Anthropic account is out of credit. Add credit at console.anthropic.com. Tell the plant manager."; setArmed(false); setAi("bad", "AI out of credit"); }
     else if (e.code === "setup") { entry.summary = "The site isn't set up yet (missing setting in Netlify). Tell the plant manager."; setArmed(false); checkAi(); }
     else if (e.code === "rate_limited") { entry.summary = "AI is busy or the usage limit was reached. Inspect fewer products (Setup → Inspect every)."; }
-    else if (e.status === 502 || e.status === 504) entry.summary = S.tier === "thorough" ? "Inspection took too long. Try Fast mode." : "AI service error. It will try again on the next product.";
-    else entry.summary = "Couldn't reach the site. Check Wi-Fi.";
+    else if (e.code === "timeout") entry.summary = S.tier === "thorough" ? "Inspection took too long. Try Fast mode." : "Inspection took too long. It will try again on the next product.";
+    else if (e.status >= 500) entry.summary = "AI service error. It will try again on the next product.";
+    else entry.summary = "Couldn't reach the site. Check the internet connection.";
   } finally {
     busy = false;
     finishEntry(entry);
@@ -1115,14 +1158,15 @@ function renderStats(){
 }
 $("#statRange").addEventListener("change", renderStats);
 $("#btnMissed").addEventListener("click", () => {
-  if (!confirm("Record that the AI passed a product that was actually bad?")) return;
   let thumb = "";
   if (camOn && video.videoWidth) thumb = thumbOf(grabZone(640));
   const entry = {id:Date.now().toString(36) + "m", ts:Date.now(), line:S.line, job:S.job, customer:S.customer, order:S.order, qty:S.qty,
     source:"operator", thumb, verdict:"MISSED", summary:"Operator found a defect the AI passed.", summary_es:"El operador encontró un defecto que la IA pasó.", defects:[], confidence:null};
   log.unshift(entry); if (log.length > 150) log.length = 150; store.set("qc.log", log); renderLog();
   bump(entry.ts, "missed");
-  toast("Missed defect recorded. Thank you.");
+  toast("Missed defect recorded.", {label:"Undo", fn:() => {
+    log = log.filter(e => e.id !== entry.id); store.set("qc.log", log); renderLog(); bump(entry.ts, "missed", -1);
+  }});
 });
 
 /* ---------- Learning from false alarms ---------- */
@@ -1147,7 +1191,7 @@ function saveOkExample(entry){
   // newest few per order, and a small total so it fits in the browser's storage
   const mine = okEx.filter(x => x.order === order);
   if (mine.length > OK_PER_ORDER) { const drop = new Set(mine.slice(0, mine.length - OK_PER_ORDER).map(x => x.id)); okEx = okEx.filter(x => !drop.has(x.id)); }
-  okEx = okEx.slice(-20);
+  okEx = okEx.slice(-8);
   store.set("qc.okEx", okEx);
 }
 function dropOkExample(entry){ okEx = okEx.filter(x => x.id !== entry.id); store.set("qc.okEx", okEx); }
@@ -1247,7 +1291,7 @@ function showAlarm(entry, remote){
   a.style.background = entry.verdict === "CHECK" ? "var(--check)" : "";
   $("#alarmImg").hidden = !entry.thumb;
   $("#alarmTitle").textContent = entry.verdict === "CAMERA" ? "CAMERA OFF" : entry.verdict;
-  $("#alarmWhere").textContent = [entry.line || "Line not set", entry.job, fmtTime(entry.ts)].filter(Boolean).join(" · ");
+  $("#alarmWhere").textContent = [entry.line || tr("No machine set"), entry.job, fmtTime(entry.ts)].filter(Boolean).join(" · ");
   $("#alarmImg").src = entry.thumb;
   const ul = $("#alarmList"); ul.textContent = "";
   ul.append(el("li", {text:sumOf(entry)}));
@@ -1268,7 +1312,11 @@ $("#alarmAck").addEventListener("click", () => closeAlarm(null));
 $("#alarmYes").addEventListener("click", () => closeAlarm("confirmed"));
 $("#alarmNo").addEventListener("click", () => closeAlarm("false"));
 let toastTimer = null;
-function toast(msg){ const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 5000); }
+function toast(msg, action){
+  const t = $("#toast"); t.textContent = msg;
+  if (action) t.append(el("button", {type:"button", class:"toast-btn", text:action.label, onclick:() => { t.classList.remove("show"); action.fn(); }}));
+  t.classList.add("show"); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), action ? 8000 : 5000);
+}
 
 $("#btnTestAlarm").addEventListener("click", () => {
   ensureAudio();
@@ -1318,34 +1366,49 @@ $("#btnFinish").addEventListener("click", () => {
 // SPACING_MS. A Fail is saved right away if the order hasn't used up its photos yet.
 const MAX_PER_ORDER = 4, SPACING_MS = 20 * 60 * 1000;
 let arch = store.get("qc.arch", {order:"", count:0, last:0});
-function archivePhoto(canvas, entry){
-  const order = S.order.trim();
+async function archivePhoto(canvas, entry){
+  const order = String(entry.order || "").trim();
   if (!order || !["PASS","CHECK","FAIL"].includes(entry.verdict)) return;
   if (arch.order !== order) arch = {order, count:0, last:0};
   if (arch.count >= MAX_PER_ORDER) return;
   const due = arch.count === 0 || Date.now() - arch.last >= SPACING_MS;
   if (!due && entry.verdict !== "FAIL") return;
   const kind = entry.verdict === "FAIL" ? "fail" : entry.verdict === "CHECK" ? "check" : arch.count === 0 ? "first" : "pass";
+  const before = {...arch};
   arch.count++; arch.last = Date.now(); store.set("qc.arch", arch);
-  savePhoto(canvas, kind, entry);
+  const ok = await savePhoto(canvas, kind, entry);
+  if (!ok && arch.order === order) { arch.count = Math.max(0, arch.count - 1); arch.last = before.last; store.set("qc.arch", arch); }
 }
 async function savePhoto(canvas, kind, info){
-  if (!accessCode || !S.order.trim()) return;
+  // info carries the order the photo belongs to (it may have changed on screen while the AI was working)
+  const order = String(info.order ?? S.order).trim();
+  if (!accessCode || !order) return false;
   // keep files a sensible size: up to 1280 px wide
   let c = canvas;
   if (c.width > 1280) { const t = document.createElement("canvas"); t.width = 1280; t.height = Math.round(c.height * 1280 / c.width); t.getContext("2d").drawImage(c, 0, 0, t.width, t.height); c = t; }
-  const body = {order:S.order.trim(), qty:(S.qty || "").trim(), customer:S.customer || "", machine:S.line || "", kind, ts:info.ts || Date.now(),
+  const body = {order, qty:String(info.qty ?? S.qty ?? "").trim(), customer:info.customer ?? S.customer ?? "", machine:info.line ?? S.line ?? "", kind, ts:info.ts || Date.now(),
     verdict:info.verdict || "", summary:info.summary || "", summary_es:info.summary_es || "",
     defects:(info.defects || []).map(d => `${d.check}: ${d.issue} (${d.severity})`).join("; "), image:c.toDataURL("image/jpeg", .82)};
   for (let attempt = 0; attempt < 3; attempt++) {
-    try { await api("/api/photos", {method:"POST", body:JSON.stringify(body)}); return; }
-    catch (e) { if (e.status === 401 || e.status === 400) return; await new Promise(r => setTimeout(r, 4000)); }
+    try { await api("/api/photos", {method:"POST", body:JSON.stringify(body), timeout:30000}); return true; }
+    catch (e) { if (e.status === 401 || e.status === 400) return false; await new Promise(r => setTimeout(r, 4000)); }
   }
+  return false;
 }
 
 // Photos tab
 const KIND_LABEL = {sample:"Good sample", first:"First product", fail:"Fail", check:"Check", pass:"Pass", manual:"Photo"};
-const imgUrl = key => "/api/photos?img=" + encodeURIComponent(key) + "&code=" + encodeURIComponent(accessCode);
+const photoUrls = new Map();              // archive key -> local picture address
+async function photoUrl(key){
+  if (photoUrls.has(key)) return photoUrls.get(key);
+  const res = await fetch("/api/photos?img=" + encodeURIComponent(key), {headers:{"x-access-code":accessCode}});
+  if (!res.ok) throw new Error("photo " + res.status);
+  const url = URL.createObjectURL(await res.blob());
+  photoUrls.set(key, url);
+  if (photoUrls.size > 60) { const old = photoUrls.keys().next().value; URL.revokeObjectURL(photoUrls.get(old)); photoUrls.delete(old); }
+  return url;
+}
+function photoImg(key){ const img = el("img", {alt:""}); photoUrl(key).then(u => { img.src = u; }).catch(() => {}); return img; }
 async function loadRecent(){
   const box = $("#phRecent"); if (!accessCode) { box.textContent = tr("Enter the access code in Setup first."); return; }
   try {
@@ -1366,19 +1429,20 @@ async function lookupOrder(order){
     $("#phTitle").textContent = tr("Order #") + order + (photos[0] && photos[0].customer ? " — " + photos[0].customer : "");
     $("#phSub").textContent = photos.length ? tr(`${photos.length} photos`) : tr("No photos saved for this order.");
     photos.forEach(p => grid.append(el("button", {type:"button", class:"pcard k-" + (p.verdict || "").toLowerCase(), onclick:() => openPhoto(p)},
-      el("img", {src:imgUrl(p.img), alt:"", loading:"lazy"}),
+      photoImg(p.img),
       el("div", {class:"pi"}, el("div", {class:"pk", text:tr(KIND_LABEL[p.kind] || "Photo")}),
         el("div", {class:"pm", text:fmtDate(p.ts) + (p.machine ? " · " + p.machine : "")}),
         p.summary ? el("div", {class:"ps", text:sumOf(p)}) : null))));
   } catch (e) { $("#phMsg").textContent = tr(e.status === 401 ? "Enter the access code in Setup first." : "Can't reach the photo archive. Check the internet connection."); }
 }
 function openPhoto(p){
-  $("#phDlgImg").src = imgUrl(p.img);
+  const dl = $("#phDlgDl"); $("#phDlgImg").removeAttribute("src"); dl.removeAttribute("href");
+  photoUrl(p.img).then(u => { $("#phDlgImg").src = u; dl.href = u; }).catch(() => {});
   const v = p.verdict && p.verdict !== "SAMPLE" ? p.verdict : "";
   $("#phDlgV").textContent = v; $("#phDlgV").className = "verdict v-" + v;
   $("#phDlgMeta").textContent = [tr(KIND_LABEL[p.kind] || "Photo"), fmtDate(p.ts), p.machine, p.customer, tr("Order #") + p.order].filter(Boolean).join(" · ");
   $("#phDlgSum").textContent = sumOf(p); $("#phDlgDef").textContent = p.defects || "";
-  $("#phDlgDl").href = imgUrl(p.img); $("#phDlgDl").setAttribute("download", `order-${p.order}-${p.kind}-${new Date(p.ts).toISOString().slice(0,16).replace(/[:T]/g,"")}.jpg`);
+  dl.setAttribute("download", `order-${p.order}-${p.kind}-${new Date(p.ts).toISOString().slice(0,16).replace(/[:T]/g,"")}.jpg`);
   $("#phDlg").showModal();
 }
 $("#phDlgClose").addEventListener("click", () => $("#phDlg").close());
@@ -1403,7 +1467,11 @@ I18N.applyLang();
 bindSetup(); renderCounts(); renderLog(); renderStats(); setChip("Idle", "");
 showTab(S.setupDone ? "inspect" : "setup"); refreshSteps();
 if (S.setupDone && S.autoStart && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-  setTimeout(async () => { await startCamera(); if (camOn) setTimeout(() => setArmed(true), 1500); }, 800);
+  setTimeout(async () => {
+    await startCamera(false);
+    if (camOn) setTimeout(() => { if (camOn && !isArmed) setArmed(true); }, 1500);
+    else retryCamera(true, false);          // camera not ready yet after a reboot: keep trying
+  }, 800);
 } else listCameras();
 checkAi(); if (alertsWanted()) pollEvents();
 

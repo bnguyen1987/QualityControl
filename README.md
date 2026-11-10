@@ -2,10 +2,10 @@
 
 Site: https://gwpg-line-qc.netlify.app (Netlify project "gwpg-line-qc", GitHub repo bnguyen1987/QualityControl)
 
-## Already done
-- Netlify project created.
-- QC_ACCESS_CODE set to `gwqc-4827` (change it anytime in Netlify:
-  Project configuration > Environment variables).
+## Access code
+Every device enters the plant access code once (Setup step 1). The code is NOT kept in this
+repository. It lives in Netlify: gwpg-line-qc > Project configuration > Environment variables >
+QC_ACCESS_CODE. To change it, edit that value and redeploy; every device then needs the new code.
 
 ## AI access
 By default the site uses Netlify AI Gateway (no API key needed; usage is billed to
@@ -19,20 +19,16 @@ Netlify credits). To use your own Anthropic account instead, follow Step 1.
    Add variable. Key: ANTHROPIC_API_KEY, Value: the key. Mark it secret.
 5. Optional: in the Anthropic console, set a monthly spend limit.
 
-## Step 2 — Deploy (from a computer with Node.js installed)
-Open a terminal in this folder and run:
-
-    npx netlify-cli login
-    npx netlify-cli deploy --prod --build --site 09a35220-e7a5-4bb1-a519-25b696898839
-
-(Drag-and-drop deploys don't include the server functions, so use the command.)
-Re-run the deploy command after any code change. Env var changes need a redeploy.
+## Step 2 — Deploying changes
+The Netlify project is linked to this GitHub repository. Every push to the `main` branch is
+built and published automatically in a minute or two. Changes to environment variables take
+effect on the next deploy (Deploys > Trigger deploy).
 
 ## Step 3 — Set up a machine PC
 1. Plug a USB camera into the PC and mount it 2–4 ft over the belt, pointing straight down.
 2. Copy `windows/Start Line QC.bat` to the PC's desktop and double-click it.
    (It opens Line QC in its own Chrome window that keeps working when Encore is in front.)
-3. Click "Allow" when Chrome asks to use the camera.
+3. Click "Allow" when Chrome asks to use the camera. The PC remembers which camera it uses.
 4. The site opens on the Setup page the first time. Work through steps 1–8:
    access code, machine and job, camera, trigger zone, checks, good sample,
    settings (tick auto-start) and alarm. Then click "Finish setup — go to Inspect".

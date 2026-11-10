@@ -17,12 +17,11 @@ function store() {
   return getDeployStore({ name: "qc-photos" });
 }
 
-function checkAccess(req: Request, url: URL): Response | null {
+function checkAccess(req: Request): Response | null {
   const code = Netlify.env.get("QC_ACCESS_CODE");
   if (!code) return json({ error: "setup", message: "QC_ACCESS_CODE is not set on the Netlify site." }, 500);
-  // images are opened by <img src>, which can't send headers, so the code may come in the URL
-  const given = req.headers.get("x-access-code") || url.searchParams.get("code");
-  if (given !== code) return json({ error: "access" }, 401);
+  // the code is only accepted in a header, never in the web address (addresses end up in logs and history)
+  if (req.headers.get("x-access-code") !== code) return json({ error: "access" }, 401);
   return null;
 }
 
@@ -47,7 +46,7 @@ async function rebuildIndex(s: ReturnType<typeof store>) {
 
 export default async (req: Request, context: Context) => {
   const url = new URL(req.url);
-  const denied = checkAccess(req, url);
+  const denied = checkAccess(req);
   if (denied) return denied;
   const s = store();
 
