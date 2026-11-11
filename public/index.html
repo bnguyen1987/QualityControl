@@ -246,6 +246,7 @@ dialog.big .body{padding:14px;display:grid;gap:6px}
       <div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M4 8l8-4 8 4v9l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v9"/></svg></span>
         <span class="brand-text">Line QC Camera<small>GoldenWest · Ontario</small></span></div>
       <span class="spacer"></span>
+      <button class="ai-pill warn" id="updBtn" type="button" hidden>Update ready — click to reload</button>
       <button class="ai-pill" id="aiPill" type="button">Checking AI…</button>
       <div class="seg" id="topLang" role="group" aria-label="Language / Idioma" data-no-i18n><button type="button" data-lang="en">EN</button><button type="button" data-lang="es">ES</button></div>
       <button class="icon-btn" id="themeBtn" type="button" title="Light / dark" aria-label="Switch light or dark"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></svg></button>
@@ -293,6 +294,7 @@ dialog.big .body{padding:14px;display:grid;gap:6px}
             <select class="btn" id="camSel" title="Camera" style="width:auto;max-width:260px"><option value="">Default camera</option></select>
           </div>
           <div class="notice bad" id="camErr" hidden></div>
+          <div class="notice bad" id="soundOff" hidden>The alarm sound is blocked until someone clicks this page. Click anywhere to turn it on.</div>
           <div class="notice" id="bgTip" hidden><span id="trigStatus"></span></div>
           <div class="notice go-setup bad" id="sampleStale" hidden>
             <span>The good sample needs to be retaken (new order, zone or camera), so it isn't being used.</span>
@@ -541,7 +543,7 @@ dialog.big .body{padding:14px;display:grid;gap:6px}
 const $ = s => document.querySelector(s);
 const store = {
   get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch{ return d; } },
-  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} }
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); return true; }catch{ return false; } }
 };
 const I18N = window.QCI18N || {tr: s => s, getLang: () => "en", setLang(){}, applyLang(){}};
 const tr = s => I18N.tr(s);
@@ -623,8 +625,8 @@ async function checkAi(){
 }
 setInterval(() => { if (!aiOk && accessCode) checkAi(); }, 30000);
 aiPill.addEventListener("click", () => {
-  const c = prompt("Plant access code", accessCode); if (c == null) return;
-  accessCode = c.trim(); store.set("qc.code", accessCode); $("#sCode").value = accessCode; checkAi(); pollEvents();
+  if (aiOk) { checkAi(); return; }
+  showTab("setup"); const c = $("#sCode"); c.scrollIntoView({block:"center"}); c.focus(); c.select(); checkAi();
 });
 function showSupOff(on){ $("#supOff").hidden = !on; }
 /* ---------- Tabs ---------- */
@@ -683,7 +685,7 @@ function bindSetup(){
   code.addEventListener("change", () => { accessCode = code.value.trim(); store.set("qc.code", accessCode); checkAi(); pollEvents(); });
   tog("#sAuto", "autoStart"); tog("#sAutoTrig", "autoTrig");
   const showManual = () => { $("#manualTrig").hidden = S.autoTrig !== false; };
-  $("#sAutoTrig").addEventListener("change", () => { showManual(); if (S.autoTrig !== false && !cal && bg) beginLearn(); });
+  $("#sAutoTrig").addEventListener("change", () => { showManual(); if (S.autoTrig === false) learn = null; else if (camOn && (!cal || !bg)) beginLearn(); });
   showManual(); tog("#sSound", "sound"); tog("#sVib", "vibrate"); tog("#sCheckAlarm", "checkAlarm");
   renderRef(); updateHeader();
 }
@@ -731,16 +733,27 @@ async function startCameraInner(manual){
     try {
       stream = await navigator.mediaDevices.getUserMedia({audio:false, video: S.camId ? {...want, deviceId:{exact:S.camId}} : {...want, facingMode:{ideal:"environment"}}});
     } catch (err) {
-      if (!S.camId || !manual || !["NotFoundError","OverconstrainedError"].includes(err && err.name)) throw err;
-      // saved camera is unplugged: fall back to any camera and tell the operator
-      toast("The selected camera wasn't found. Using the default camera — check the USB cable.");
-      stream = await navigator.mediaDevices.getUserMedia({audio:false, video:want});
+      if (!S.camId || !["NotFoundError","OverconstrainedError"].includes(err && err.name)) throw err;
+      if (manual) {
+        // saved camera is unplugged: fall back to any camera and tell the operator
+        toast("The selected camera wasn't found. Using the default camera — check the USB cable.");
+        stream = await navigator.mediaDevices.getUserMedia({audio:false, video:want});
+      } else {
+        // starting by itself: the browser sometimes gives the same camera a new ID. Accept it only
+        // if exactly one camera carries the saved camera's name; never a different camera.
+        const same = S.camLabel ? (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "videoinput" && d.label === S.camLabel) : [];
+        if (same.length !== 1) throw err;
+        stream = await navigator.mediaDevices.getUserMedia({audio:false, video:{...want, deviceId:{exact:same[0].deviceId}}});
+        S.camId = "";                    // saved again just below with its new ID
+      }
     }
     const track = stream.getVideoTracks()[0];
     track.addEventListener("ended", onCamLost);
     // remember which camera this PC uses, so a second camera plugged in later can't take its place
     const usedId = track.getSettings().deviceId;
-    if (usedId && !S.camId) { S.camId = usedId; save(); }
+    if (usedId && !S.camId) S.camId = usedId;
+    if (usedId === S.camId && track.label && S.camLabel !== track.label) S.camLabel = track.label;
+    save();
     listCameras();
     video.srcObject = stream; await video.play();
     camOn = true; $("#stageEmpty").hidden = true; $("#meter").hidden = false; $("#photoFallback").hidden = true;
@@ -763,6 +776,7 @@ async function startCameraInner(manual){
       : e && ["NotFoundError","OverconstrainedError"].includes(e.name) ? "The camera wasn't found. Check that it is plugged in."
       : "The live camera couldn't start in this view.";
     const n = $("#camErr"); n.textContent = msg; n.hidden = false; $("#photoFallback").hidden = false;
+    if (!camOn && stream) { stream.getTracks().forEach(t => t.stop()); stream = null; video.srcObject = null; }
   }
 }
 function stopCamera(){
@@ -786,7 +800,7 @@ async function listCameras(){
   } catch {}
 }
 $("#camSel").addEventListener("change", async e => {
-  S.camId = e.target.value; save(); resetTrigger(); store.set("qc.refCrop", false); renderRef();
+  S.camId = e.target.value; S.camLabel = ""; save(); resetTrigger(); store.set("qc.refCrop", false); renderRef();
   if (camOn) { const armed = isArmed; stopCamera(); await startCamera(true); if (armed && camOn) setArmed(true); }
   toast("Camera changed. Keep the yellow box clear for a few seconds while it relearns the belt.");
 });
@@ -928,8 +942,17 @@ function thresholds(){
 }
 function saveCal(){ store.set("qc.cal", cal); }
 function resetTrigger(){ bg = null; bgPrev = null; prevGray = null; cal = null; learn = null; store.set("qc.bg", null); store.set("qc.cal", null); state = "EMPTY"; presentN = clearN = 0; }
-function beginLearn(){ bg = null; bgPrev = null; learn = {frames:[], started:Date.now()}; state = "EMPTY"; presentN = clearN = 0; refreshTrigStatus(); }
-$("#btnBg").addEventListener("click", () => { cal = null; beginLearn(); toast("Keep the yellow box clear for a few seconds."); });
+// instant: the operator clicked Relearn. In manual mode that takes the picture as the empty belt right
+// away; without a click, manual mode triggers on movement until the belt is learned.
+function beginLearn(instant){
+  bgPrev = null; state = "EMPTY"; presentN = clearN = 0;
+  if (!AUTO()) {
+    learn = null; bg = instant ? zoneGray() : null; saveBg();
+    if (bg) toast("Empty belt learned.");
+  } else { bg = null; learn = {frames:[], started:Date.now()}; }
+  refreshTrigStatus(); refreshSteps();
+}
+$("#btnBg").addEventListener("click", () => { cal = null; beginLearn(true); if (AUTO()) toast("Keep the yellow box clear for a few seconds."); });
 
 // learn the empty belt: wait for ~1.5 s of a still picture, average it, and measure its flicker
 function learnStep(g, motion){
@@ -1091,8 +1114,15 @@ function finishEntry(entry){
   if (entry.verdict === "CHECK") counts.check++;
   if (entry.verdict === "FAIL") counts.fail++;
   if (entry.verdict === "UNCLEAR") counts.unclear++;
+  if (entry.verdict === "ERROR") counts.notInspected++;
   renderCounts(); renderLast(entry);
-  log.unshift(entry); if (log.length > 150) log.length = 150; store.set("qc.log", log); renderLog();
+  // the same error again and again (internet down): keep one log line with a count, and one message
+  const prev = log[0];
+  if (entry.verdict === "ERROR" && prev && prev.verdict === "ERROR" && prev.summary === entry.summary) {
+    prev.repeat = (prev.repeat || 1) + 1; prev.ts = entry.ts; prev.thumb = entry.thumb;
+    saveLog(); renderLog(); return;
+  }
+  log.unshift(entry); if (log.length > 150) log.length = 150; saveLog(); renderLog();
   if (entry.verdict === "FAIL" || (entry.verdict === "CHECK" && S.checkAlarm)) { showAlarm(entry); pushEvent(entry); }
   else if (entry.verdict === "CHECK") { chirp(); toast(tr("Check: " + sumOf(entry))); pushEvent(entry); }
   else if (entry.verdict === "ERROR") toast(tr(entry.summary));
@@ -1100,7 +1130,7 @@ function finishEntry(entry){
 function renderCounts(){
   saveCounts();
   $("#cInsp").textContent = counts.insp; $("#cPass").textContent = counts.pass; $("#cCheck").textContent = counts.check; $("#cFail").textContent = counts.fail;
-  $("#countNote").textContent = `Products seen: ${counts.seen} · Not inspected (AI busy): ${counts.notInspected} · Unclear photos: ${counts.unclear}` + (counts.captured ? ` · Test captures: ${counts.captured}` : "");
+  $("#countNote").textContent = `Products seen: ${counts.seen} · Not inspected: ${counts.notInspected} · Unclear photos: ${counts.unclear}` + (counts.captured ? ` · Test captures: ${counts.captured}` : "");
 }
 function defectList(defects){
   const ul = el("ul", {class:"defects"});
@@ -1135,7 +1165,7 @@ function setFeedback(entry, fb){
   entry.fb = fb; bump(entry.ts, field[fb], 1);
   if (fb === "false") saveOkExample(entry); else dropOkExample(entry);
   const i = log.findIndex(e => e.id === entry.id); if (i >= 0) log[i] = entry;
-  store.set("qc.log", log); renderLog(); if (log[0] && log[0].id === entry.id) renderLast(entry);
+  saveLog(); renderLog(); if (log[0] && log[0].id === entry.id) renderLast(entry);
 }
 function fbButtons(entry){
   if (!["FAIL","CHECK"].includes(entry.verdict)) return null;
@@ -1162,10 +1192,10 @@ $("#btnMissed").addEventListener("click", () => {
   if (camOn && video.videoWidth) thumb = thumbOf(grabZone(640));
   const entry = {id:Date.now().toString(36) + "m", ts:Date.now(), line:S.line, job:S.job, customer:S.customer, order:S.order, qty:S.qty,
     source:"operator", thumb, verdict:"MISSED", summary:"Operator found a defect the AI passed.", summary_es:"El operador encontró un defecto que la IA pasó.", defects:[], confidence:null};
-  log.unshift(entry); if (log.length > 150) log.length = 150; store.set("qc.log", log); renderLog();
+  log.unshift(entry); if (log.length > 150) log.length = 150; saveLog(); renderLog();
   bump(entry.ts, "missed");
   toast("Missed defect recorded.", {label:"Undo", fn:() => {
-    log = log.filter(e => e.id !== entry.id); store.set("qc.log", log); renderLog(); bump(entry.ts, "missed", -1);
+    log = log.filter(e => e.id !== entry.id); saveLog(); renderLog(); bump(entry.ts, "missed", -1);
   }});
 });
 
@@ -1199,23 +1229,25 @@ const okExamplesFor = order => okEx.filter(x => x.order === (order || "").trim()
 
 /* ---------- Log ---------- */
 let log = store.get("qc.log", []);
+// if the browser's storage is full, drop the oldest entries until the log fits again
+function saveLog(){ while (!store.set("qc.log", log) && log.length > 10) log.length = Math.floor(log.length * .7); }
 function renderLog(){
   const f = $("#logFilter").value, list = $("#logList"); list.textContent = "";
   const rows = log.filter(e => f === "all" || (f === "REVIEW" ? ["FAIL","CHECK"].includes(e.verdict) && !e.fb : e.verdict === f));
   if (!rows.length) { list.append(el("div", {class:"empty", text:"No inspections to show."})); return; }
   rows.forEach(e => list.append(el("div", {class:"item"}, el("img", {src:e.thumb, alt:"", loading:"lazy"}),
-    el("div", {}, el("div", {class:"sum", text:sumOf(e)}), el("div", {class:"meta", text:fmtDate(e.ts) + (e.line ? " · " + e.line : "") + (e.order ? " · " + tr("Order #") + e.order : "")}), fbButtons(e)),
+    el("div", {}, el("div", {class:"sum", text:sumOf(e) + (e.repeat > 1 ? " (×" + e.repeat + ")" : "")}), el("div", {class:"meta", text:fmtDate(e.ts) + (e.line ? " · " + e.line : "") + (e.order ? " · " + tr("Order #") + e.order : "")}), fbButtons(e)),
     el("div", {class:"v v-" + e.verdict, text:e.verdict}))));
 }
 $("#logFilter").addEventListener("change", renderLog);
-$("#btnClear").addEventListener("click", () => { if (!confirm("Clear the inspection log on this device?")) return; log = []; store.set("qc.log", log); renderLog(); });
+$("#btnClear").addEventListener("click", () => { if (!confirm("Clear the inspection log on this device?")) return; log = []; saveLog(); renderLog(); });
 $("#btnExport").addEventListener("click", async () => {
   const q = v => { let s = String(v ?? ""); if (/^[=+\-@]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; };
   const lines = [["Date","Time","Machine","Customer","Order #","Quantity","Result","Operator review","Summary","Defects","Confidence","Trigger"].join(",")];
   log.slice().reverse().forEach(e => { const d = new Date(e.ts);
     lines.push([d.toLocaleDateString(), d.toLocaleTimeString(), e.line, e.customer ?? e.job, e.order ?? "", e.qty ?? "", e.verdict, e.fb === "confirmed" ? "Real defect" : e.fb === "false" ? "False alarm" : "", e.summary,
       e.defects.map(x => `${x.check}: ${x.issue} (${x.severity})`).join("; "), e.confidence ?? "", e.source].map(q).join(",")); });
-  const url = URL.createObjectURL(new Blob([lines.join("\n")], {type:"text/csv"}));
+  const url = URL.createObjectURL(new Blob(["\uFEFF" + lines.join("\r\n")], {type:"text/csv;charset=utf-8"}));
   const a = el("a", {href:url, download:`qc-log-${new Date().toISOString().slice(0,10)}.csv`}); document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 });
@@ -1461,6 +1493,44 @@ $("#themeBtn").addEventListener("click", () => {
   const dark = document.documentElement.dataset.theme ? document.documentElement.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
   const t = dark ? "light" : "dark"; setTheme(t); store.set("qc.theme", t);
 });
+
+/* ---------- Alarm sound check ---------- */
+// Browsers block sound until someone clicks the page, unless Line QC was opened with its shortcut.
+// After a restart nobody may have clicked yet, so say so instead of failing silently.
+function checkSound(){
+  ensureAudio();
+  $("#soundOff").hidden = !(S.sound && camOn) || (actx && actx.state === "running");
+}
+setTimeout(checkSound, 2500); setInterval(checkSound, 10000);
+document.addEventListener("pointerdown", () => setTimeout(checkSound, 300));
+
+/* ---------- Picks up new versions by itself ---------- */
+// A machine PC keeps this page open for weeks. Every 15 minutes it checks whether the site was
+// updated. A station that restarts itself (auto-start on) reloads at a quiet moment; any other
+// device shows an "Update ready" button instead.
+let pageTag = null, newTag = null, updateReady = false;
+async function checkVersion(){
+  try {
+    const r = await fetch("/", {method:"HEAD", cache:"no-store"}); const tag = r.ok && r.headers.get("etag");
+    if (!tag) return;
+    if (pageTag == null) { pageTag = tag; return; }
+    // the same new tag twice in a row, so a half-finished deploy can't trigger a reload
+    if (tag !== pageTag && tag === newTag) updateReady = true;
+    newTag = tag !== pageTag ? tag : null;
+  } catch {}
+}
+function applyUpdate(){
+  if (!updateReady) return;
+  const typing = ["INPUT","TEXTAREA","SELECT"].includes((document.activeElement || {}).tagName);
+  const quiet = !busy && !currentAlarm && !zoning && !learn && !typing && !document.querySelector("dialog[open]")
+    && (!isArmed || (state === "EMPTY" && presentN === 0));
+  const selfStarting = !!(S.setupDone && S.autoStart && isArmed);
+  // at most one automatic reload every 6 hours, whatever happens
+  if (selfStarting && quiet && Date.now() - store.get("qc.autoReload", 0) > 6 * 3600 * 1000) { store.set("qc.autoReload", Date.now()); location.reload(); return; }
+  $("#updBtn").hidden = !!selfStarting;
+}
+$("#updBtn").addEventListener("click", () => location.reload());
+setTimeout(checkVersion, 5000); setInterval(checkVersion, 15 * 60 * 1000); setInterval(applyUpdate, 2000);
 
 /* ---------- Boot ---------- */
 I18N.applyLang();

@@ -108,7 +108,7 @@ export default async (req: Request, context: Context) => {
       signal: ac.signal,
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model, max_tokens: 900, messages: [{ role: "user", content }] }),
+      body: JSON.stringify({ model, max_tokens: 1200, messages: [{ role: "user", content }] }),
     });
     raw = await res.text();
   } catch (e: any) {

@@ -155,6 +155,9 @@
     "Not yet reviewed": "Sin revisar", "Catch rate": "Tasa de detección", "False alarm rate": "Tasa de falsas alarmas",
     "Take a new good sample in Setup step 6.": "Tome una muestra buena nueva en el paso 6 de Configuración.",
 
+    "Update ready — click to reload": "Actualización lista — haga clic para recargar",
+    "The alarm sound is blocked until someone clicks this page. Click anywhere to turn it on.": "El sonido de la alarma está bloqueado hasta que alguien haga clic en esta página. Haga clic en cualquier parte para activarlo.",
+
     // Photos
     "Photos": "Fotos", "Photo archive": "Archivo de fotos",
     "Up to 5 photos per order: the good sample plus a few products spread through the run (a Fail is always saved first). Photos are kept for 1 year.":
@@ -198,8 +201,8 @@
 
   // Text with numbers or names inside
   const PATTERNS = [
-    [/^Products seen: (\d+) · Not inspected \(AI busy\): (\d+) · Unclear photos: (\d+)(?: · Test captures: (\d+))?$/,
-      (m, a, b, c, d) => `Productos vistos: ${a} · No inspeccionados (IA ocupada): ${b} · Fotos no claras: ${c}` + (d ? ` · Capturas de prueba: ${d}` : "")],
+    [/^Products seen: (\d+) · Not inspected: (\d+) · Unclear photos: (\d+)(?: · Test captures: (\d+))?$/,
+      (m, a, b, c, d) => `Productos vistos: ${a} · No inspeccionados: ${b} · Fotos no claras: ${c}` + (d ? ` · Capturas de prueba: ${d}` : "")],
     [/^Still to do: (.+)\.$/, (m, list) => "Falta: " + list.split(", ").map(s => ES[s] || s).join(", ") + "."],
     [/^— low \(big products, busy background\), (\d+)\/10$/, (m, n) => `— baja (productos grandes, fondo con movimiento), ${n}/10`],
     [/^— high \(small or light-colored products\), (\d+)\/10$/, (m, n) => `— alta (productos chicos o de color claro), ${n}/10`],
@@ -208,6 +211,7 @@
     [/^(.*) · confidence (\d+)%(.*)$/, (m, a, n, b) => `${a} · confianza ${n}%${b}`],
     [/^Calibrating: (\d+) of (\d+) products seen\.$/, (m, a, b) => `Calibrando: ${a} de ${b} productos vistos.`],
     [/^(\d+) photos$/, (m, n) => `${n} fotos`],
+    [/^(.*) \(×(\d+)\)$/, (m, t, n) => `${ES[t] || t} (×${n})`],
     [/^Check: (.*)$/, (m, s) => "Revisar: " + s],
     [/^Camera (\d+)$/, (m, n) => "Cámara " + n],
     [/^This window was hidden for about (\d+) min, so some products may have been missed\. Keep Line QC visible, or start it with the Line QC shortcut\.$/,

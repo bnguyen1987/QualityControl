@@ -40,6 +40,11 @@ effect on the next deploy (Deploys > Trigger deploy).
 Supervisors: open the site on a phone, enter the code, go to the Alerts tab and
 turn on "Sound the alarm on this phone".
 
+## Updates
+Machine PCs keep the page open for weeks, so the page checks for a new version every
+15 minutes. A station with auto-start on reloads itself at a quiet moment (at most once
+every 6 hours); any other device shows an "Update ready" button in the header.
+
 ## Optional settings (Netlify environment variables)
 - QC_MODEL_FAST — model for Fast mode (default claude-haiku-4-5-20251001)
 - QC_MODEL_THOROUGH — model for Thorough mode (default claude-sonnet-5)
